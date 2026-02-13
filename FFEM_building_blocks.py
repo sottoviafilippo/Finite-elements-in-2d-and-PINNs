@@ -32,6 +32,31 @@ class Mesh:
         return [nb for nb in all_possible_neighbors if nb[0] >= 0 and nb[1] >= 0 and nb[0] <= self.Nx-1 and nb[1] <= self.Ny-1]
     
 
-    def compute_integral_of_basis_function(self, x_index: int, y_index: int)
+    def compute_integral_of_basis_function(self, x_index: int, y_index: int):
         
         """ needed later to normalize the function """
+
+        # TO BE COMPLETED
+        return 1
+    
+
+    def compute_derivative_basis_element(self, indices1, indices2):
+
+        x_index1, y_index1 = indices1
+        x_index2, y_index2 = indices2
+
+        """ computes the elements of the matrix for the first derivative, given two sets of indices """
+        norm_1 = self.compute_integral_of_basis_function(x_index1, y_index1)
+        norm_2 = self.compute_integral_of_basis_function(x_index2, y_index2)
+
+        """ if the two points are not neighbors, returns 0"""
+        if not ([x_index2, y_index2] in self.find_neighbors(x_index1, x_index2)):
+            return 0
+    
+        return 1 #TO BE FIXED AND COMPLETED
+    
+
+
+
+# TO DO: USE SPARSE MATRICES TO BUILD MATRICES THAT WILL GO INTO FINAL EQUATION
+# ONE SHOULD ACCEPT A GENERAL EQUATION, WITH GIVEN COEFFICIENTS FOR THE VARIOUS OPERATORS
