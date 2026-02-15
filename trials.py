@@ -11,6 +11,7 @@ mymesh = Mesh(x, y, verbose=True)
 mymesh.build_mass_matrix()
 mymesh.build_stiffness_matrix()
 
+# this function was used for tests
 def is_sparse_symmetric(A: csr_matrix, tol: float = 1e-6) -> bool:
     """
     Checks if a sparse matrix is symmetric within a given tolerance. from Gemini
