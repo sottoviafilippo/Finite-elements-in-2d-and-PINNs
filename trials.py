@@ -11,3 +11,12 @@ print(mymesh.grid)
 print(mymesh.compute_integral_of_basis_function(1,1))
 print(mymesh.compute_integral_of_basis_function(0,0))
 print(mymesh.compute_integral_of_basis_function(0,1))
+
+print(mymesh.compute_integral_of_basis_function_dx(1,1))
+print(mymesh.compute_integral_of_basis_function_dx(0,0))
+print(mymesh.compute_integral_of_basis_function_dx(0,1))
+print(mymesh.compute_integral_of_basis_function_dx(4,0))
+
+print(mymesh.compute_integral_of_basis_function_dy(1,1))
+print(mymesh.compute_integral_of_basis_function_dy(0,0))
+print(mymesh.compute_integral_of_basis_function_dy(0,1))

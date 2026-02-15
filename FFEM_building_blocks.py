@@ -30,10 +30,12 @@ class Mesh:
             return 0
         
         all_possible_neighbors = [
-            [x_index - 1, y_index], 
+            [x_index - 1, y_index],
+            [x_index - 1, y_index + 1], 
             [x_index, y_index + 1], 
             [x_index + 1, y_index], 
-            [x_index, y_index - 1]
+            [x_index, y_index - 1],
+            [x_index - 1, y_index - 1]
         ]
 
         # Only return elements within the grid boundaries
@@ -48,145 +50,58 @@ class Mesh:
 
     def compute_integral_of_basis_function(self, x_index: int, y_index: int):
         """Computes the diagonal elements of \int \psi_i \psi_j."""
-        if x_index < 0 or y_index < 0:
-            warnings.warn("Warning: negative index", UserWarning)
-            return 0
-        
-        if x_index >= self.Nx or y_index >= self.Ny:
-            warnings.warn("Warning: index out of range", UserWarning)
+        if not self.check_in_grid(x_index, y_index):
+            warnings.warn("Warning: indices out of range", UserWarning)
             return 0
 
-        neighbors = self.find_neighbors(x_index, y_index)
-        n_nb = len(neighbors)
         inte = 0.0  # Initialize integral value
 
-        if n_nb == 4:
+        if self.check_in_grid(x_index - 1, y_index + 1):
             inte = (self.x_pos[x_index] - self.x_pos[x_index - 1]) * (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 6.0
+        if self.check_in_grid(x_index + 1, y_index + 1):
             inte += (self.x_pos[x_index + 1] - self.x_pos[x_index]) * (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 12.0
+        if self.check_in_grid(x_index + 1, y_index - 1):
             inte += (self.x_pos[x_index + 1] - self.x_pos[x_index]) * (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 6.0
+        if self.check_in_grid(x_index - 1, y_index - 1):
             inte += (self.x_pos[x_index] - self.x_pos[x_index - 1]) * (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 12.0
-
-        elif x_index == 0:
-            if y_index == 0:
-                inte = (self.x_pos[1] - self.x_pos[0]) * (self.y_pos[1] - self.y_pos[0]) / 12.0
-            elif y_index == self.Ny - 1:
-                inte = (self.x_pos[1] - self.x_pos[0]) * (self.y_pos[-1] - self.y_pos[-2]) / 6.0
-            else:
-                inte = (self.x_pos[1] - self.x_pos[0]) * (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 12.0
-                inte += (self.x_pos[1] - self.x_pos[0]) * (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 6.0
-        
-        elif x_index == self.Nx - 1:
-            if y_index == self.Ny - 1:
-                inte = (self.x_pos[-1] - self.x_pos[-2]) * (self.y_pos[-1] - self.y_pos[-2]) / 12.0
-            elif y_index == 0:
-                inte = (self.x_pos[-1] - self.x_pos[-2]) * (self.y_pos[1] - self.y_pos[0]) / 6.0
-            else:
-                inte = (self.x_pos[-1] - self.x_pos[-2]) * (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 12.0
-                inte += (self.x_pos[-1] - self.x_pos[-2]) * (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 6.0
-
-        elif y_index == 0:
-            inte = (self.x_pos[x_index] - self.x_pos[x_index - 1]) * (self.y_pos[1] - self.y_pos[0]) / 6.0
-            inte += (self.x_pos[x_index + 1] - self.x_pos[x_index]) * (self.y_pos[1] - self.y_pos[0]) / 12.0
-
-        elif y_index == self.Ny - 1:
-            inte = (self.x_pos[x_index] - self.x_pos[x_index - 1]) * (self.y_pos[-1] - self.y_pos[-2]) / 12.0
-            inte += (self.x_pos[x_index + 1] - self.x_pos[x_index]) * (self.y_pos[-1] - self.y_pos[-2]) / 6.0
 
         return inte
     
     def compute_integral_of_basis_function_dx(self, x_index: int, y_index: int):
         """Computes the diagonal elements of \int d_x\psi_i d_x\psi_j."""
-        if x_index < 0 or y_index < 0:
-            warnings.warn("Warning: negative index", UserWarning)
-            return 0
-        
-        if x_index >= self.Nx or y_index >= self.Ny:
-            warnings.warn("Warning: index out of range", UserWarning)
+        if not self.check_in_grid(x_index, y_index):
+            warnings.warn("Warning: indices out of range", UserWarning)
             return 0
 
-        neighbors = self.find_neighbors(x_index, y_index)
-        n_nb = len(neighbors)
         inte = 0.0  # Initialize integral value
 
-        if n_nb == 4:
+        if self.check_in_grid(x_index + 1, y_index + 1):
             inte += 1/(self.x_pos[x_index + 1] - self.x_pos[x_index]) * (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 2.0
+        if self.check_in_grid(x_index + 1, y_index - 1):
             inte += 1/(self.x_pos[x_index + 1] - self.x_pos[x_index]) * (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 2.0
+        if self.check_in_grid(x_index - 1, y_index - 1):
             inte += 1/(self.x_pos[x_index] - self.x_pos[x_index - 1]) * (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 2.0
+        if self.check_in_grid(x_index - 1, y_index + 1):
             inte += 1/(self.x_pos[x_index] - self.x_pos[x_index - 1]) * (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 2.0
-
-        elif x_index == 0:
-            if y_index == 0:
-                inte = 1/(self.x_pos[1] - self.x_pos[0]) * (self.y_pos[1] - self.y_pos[0]) / 2.0
-            elif y_index == self.Ny - 1:
-                inte = 1/(self.x_pos[1] - self.x_pos[0]) * (self.y_pos[-1] - self.y_pos[-2]) / 2.0
-            else:
-                inte = 1/(self.x_pos[1] - self.x_pos[0]) * (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 2.0
-                inte += 1/(self.x_pos[1] - self.x_pos[0]) * (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 2.0
-        
-        elif x_index == self.Nx - 1:
-            if y_index == self.Ny - 1:
-                inte = 1/(self.x_pos[-1] - self.x_pos[-2]) * (self.y_pos[-1] - self.y_pos[-2]) / 2.0
-            elif y_index == 0:
-                inte = 1/(self.x_pos[-1] - self.x_pos[-2]) * (self.y_pos[1] - self.y_pos[0]) / 2.0
-            else:
-                inte = 1/(self.x_pos[-1] - self.x_pos[-2]) * (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 2.0
-                inte += 1/(self.x_pos[-1] - self.x_pos[-2]) * (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 2.0
-
-        elif y_index == 0:
-            inte = 1/(self.x_pos[x_index] - self.x_pos[x_index - 1]) * (self.y_pos[1] - self.y_pos[0]) / 2.0
-            inte += 1/(self.x_pos[x_index + 1] - self.x_pos[x_index]) * (self.y_pos[1] - self.y_pos[0]) / 2.0
-
-        elif y_index == self.Ny - 1:
-            inte = 1/(self.x_pos[x_index] - self.x_pos[x_index - 1]) * (self.y_pos[-1] - self.y_pos[-2]) / 2.0
-            inte += 1/(self.x_pos[x_index + 1] - self.x_pos[x_index]) * (self.y_pos[-1] - self.y_pos[-2]) / 2.0
 
         return inte
 
     def compute_integral_of_basis_function_dy(self, x_index: int, y_index: int):
         """Computes the diagonal elements of \int d_y\psi_i d_y\psi_j."""
-        if x_index < 0 or y_index < 0:
-            warnings.warn("Warning: negative index", UserWarning)
-            return 0
-        
-        if x_index >= self.Nx or y_index >= self.Ny:
-            warnings.warn("Warning: index out of range", UserWarning)
+        if not self.check_in_grid(x_index, y_index):
+            warnings.warn("Warning: indices out of range", UserWarning)
             return 0
 
-        neighbors = self.find_neighbors(x_index, y_index)
-        n_nb = len(neighbors)
         inte = 0.0  # Initialize integral value
 
-        if n_nb == 4:
+        if self.check_in_grid(x_index-1, y_index+1):
             inte += (self.x_pos[x_index] - self.x_pos[x_index - 1]) / (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 2.0
+        if self.check_in_grid(x_index+1, y_index+1):
             inte += (self.x_pos[x_index + 1] - self.x_pos[x_index]) / (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 2.0
+        if self.check_in_grid(x_index+1, y_index-1):
             inte += (self.x_pos[x_index + 1] - self.x_pos[x_index]) / (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 2.0
+        if self.check_in_grid(x_index-1, y_index-1):
             inte += (self.x_pos[x_index] - self.x_pos[x_index - 1]) / (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 2.0
-
-        elif x_index == 0:
-            if y_index == 0:
-                inte = (self.x_pos[1] - self.x_pos[0]) / (self.y_pos[1] - self.y_pos[0]) / 2.0
-            elif y_index == self.Ny - 1:
-                inte = (self.x_pos[1] - self.x_pos[0]) / (self.y_pos[-1] - self.y_pos[-2]) / 2.0
-            else:
-                inte = (self.x_pos[1] - self.x_pos[0]) / (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 2.0
-                inte += (self.x_pos[1] - self.x_pos[0]) / (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 2.0
-        
-        elif x_index == self.Nx - 1:
-            if y_index == self.Ny - 1:
-                inte = (self.x_pos[-1] - self.x_pos[-2]) / (self.y_pos[-1] - self.y_pos[-2]) / 2.0
-            elif y_index == 0:
-                inte = (self.x_pos[-1] - self.x_pos[-2]) / (self.y_pos[1] - self.y_pos[0]) / 2.0
-            else:
-                inte = (self.x_pos[-1] - self.x_pos[-2]) / (self.y_pos[y_index] - self.y_pos[y_index - 1]) / 2.0
-                inte += (self.x_pos[-1] - self.x_pos[-2]) / (self.y_pos[y_index + 1] - self.y_pos[y_index]) / 2.0
-
-        elif y_index == 0:
-            inte = (self.x_pos[x_index] - self.x_pos[x_index - 1]) / (self.y_pos[1] - self.y_pos[0]) / 2.0
-            inte += (self.x_pos[x_index + 1] - self.x_pos[x_index]) / (self.y_pos[1] - self.y_pos[0]) / 2.0
-
-        elif y_index == self.Ny - 1:
-            inte = (self.x_pos[x_index] - self.x_pos[x_index - 1]) / (self.y_pos[-1] - self.y_pos[-2]) / 2.0
-            inte += (self.x_pos[x_index + 1] - self.x_pos[x_index]) / (self.y_pos[-1] - self.y_pos[-2]) / 2.0
 
         return inte
 
@@ -195,35 +110,72 @@ class Mesh:
         x_index1, y_index1 = indices1
         x_index2, y_index2 = indices2
 
+        if indices1 == indices2:
+            return self.compute_integral_of_basis_function(x_index1, y_index1)
+
         if not ([x_index2, y_index2] in self.find_neighbors(x_index1, y_index1)):
             return 0 # for linear elements non-neighbors have 0 overlap
         
-        if indices1 == indices2:
-            return self.compute_integral_of_basis_function(x_index1, y_index1)
-    
-        return 1  # TODO: Implement full calculation
+        inte = 0.0
+
+        if x_index2 == x_index1 + 1 and y_index2 == y_index1: # neighbor on the right
+            if self.check_in_grid(x_index1+1, y_index1+1):
+                inte = (self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) * (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 24.0
+            if self.check_in_grid(x_index1+1, y_index1-1):
+                inte = inte + (self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) * (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 24.0
+
+        elif x_index2 == x_index1 + 1 and y_index2 == y_index1 - 1: # neighbor on the bottom right
+            inte = (self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) * (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 12.0
+
+        elif x_index2 == x_index1 and y_index2 == y_index1 - 1: # neighbor on the bottom
+            if self.check_in_grid(x_index1+1, y_index1-1):
+                inte = (self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) * (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 24.0
+            if self.check_in_grid(x_index1-1, y_index1-1):
+                inte = inte + (self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) * (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 24.0
+
+        elif x_index2 == x_index1 - 1 and y_index2 == y_index1: # neighbor on the left
+            if self.check_in_grid(x_index1-1, y_index1-1):
+                inte = (self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) * (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 24.0
+            if self.check_in_grid(x_index1-1, y_index1+1):
+                inte = inte + (self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) * (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 24.0
+        
+        elif x_index2 == x_index1 - 1 and y_index2 == y_index1 + 1: # neighbor on the top left
+            inte = (self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) * (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 12.0
+
+        elif x_index2 == x_index1 and y_index2 == y_index1 + 1: # neighbor on the top
+            if self.check_in_grid(x_index1-1, y_index1+1):
+                inte = (self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) * (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 24.0
+            if self.check_in_grid(x_index1+1, y_index1+1):
+                inte = inte + (self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) * (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 24.0
+
+        return inte  
 
     def compute_product_basis_element_dx(self, indices1: tuple, indices2: tuple):
         """Computes matrix elements for the first derivative in X."""
         x_index1, y_index1 = indices1
         x_index2, y_index2 = indices2
 
-        inte = 0
+        if indices1 == indices2:
+            return self.compute_integral_of_basis_function_dx(x_index1, y_index1)
+
+        inte = 0.0
 
         if not ([x_index2, y_index2] in self.find_neighbors(x_index1, y_index1)):
             return 0
 
-        elif x_index2 == x_index1 + 1: # neighbor on the right
+        elif x_index2 == x_index1 + 1 and y_index2 == y_index1: # neighbor on the right
             if self.check_in_grid(x_index1+1, y_index1+1):
                 inte = -1/(self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) * (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 2.0
             if self.check_in_grid(x_index1+1, y_index1-1):
                 inte = inte - 1/(self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) * (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 2.0
 
-        elif x_index2 == x_index1 - 1: # neighbor on the left
+        elif x_index2 == x_index1 - 1 and y_index2 == y_index1: # neighbor on the left
             if self.check_in_grid(x_index1-1, y_index1+1):
                 inte = -1/(self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) * (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 2.0
             if self.check_in_grid(x_index1-1, y_index1-1):
                 inte = inte - 1/(self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) * (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 2.0
+
+        # top left and bottom right neighbors give 0
 
         return  inte
     
@@ -232,10 +184,27 @@ class Mesh:
         x_index1, y_index1 = indices1
         x_index2, y_index2 = indices2
 
+        if indices1 == indices2:
+            return self.compute_integral_of_basis_function_dy(x_index1, y_index1)
+
+        inte = 0.0
+
         if not ([x_index2, y_index2] in self.find_neighbors(x_index1, y_index1)):
             return 0
     
-        return 0  # TODO: Implement full calculation
+        elif y_index2 == y_index1 + 1: # neighbor above
+            if self.check_in_grid(x_index1-1, y_index1+1):
+                inte = -(self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) / (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 2.0
+            if self.check_in_grid(x_index1+1, y_index1+1):
+                inte = inte - (self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) / (self.y_pos[y_index1+1] - self.y_pos[y_index1]) / 2.0
+
+        elif y_index2 == y_index1 - 1: # neighbor below
+            if self.check_in_grid(x_index1-1, y_index1-1):
+                inte = -(self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) / (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 2.0
+            if self.check_in_grid(x_index1+1, y_index1-1):
+                inte = inte - (self.x_pos[x_index1+1] - self.x_pos[x_index1]) / (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 2.0
+
+        return inte  
 
 
 
