@@ -1,10 +1,13 @@
 import numpy as np
 from FFEM_building_blocks import Mesh
 
-x = [1,2,3,4]
-y = [5,6,7,8]
+x = np.linspace(0, 1, 5)
+y = np.linspace(0, 1, 4)
 
 mymesh = Mesh(x, y)
 
-print(mymesh.compute_derivative_basis_element([0,0], [3,3]))
-print(mymesh.compute_derivative_basis_element([0,0], [0,1]))
+print(mymesh.grid)
+
+print(mymesh.compute_integral_of_basis_function(1,1))
+print(mymesh.compute_integral_of_basis_function(0,0))
+print(mymesh.compute_integral_of_basis_function(0,1))

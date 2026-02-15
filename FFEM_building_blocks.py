@@ -2,7 +2,7 @@ import numpy as np
 import warnings
 
 class Mesh:
-    """ Produces a 2D finite element computational grid"""
+    """ Produces a 2D finite element computational grid and computes the associated matrices for the resolution of differential equations"""
     """ Triangular mesh with linear elements"""
 
 
@@ -26,7 +26,11 @@ class Mesh:
             warnings.warn("Warning: negative index", UserWarning)
             return 0
         
-        all_possible_neighbors = [[x_index + 1, y_index], [x_index - 1, y_index], [x_index, y_index + 1], [x_index, y_index - 1]]
+        if x_index >= self.Nx or y_index >= self.Ny:
+            warnings.warn("Warning: index out of range", UserWarning)
+            return 0
+        
+        all_possible_neighbors = [[x_index - 1, y_index], [x_index, y_index + 1], [x_index + 1, y_index], [x_index, y_index - 1]]
 
         """ only return elements within the grid """
         return [nb for nb in all_possible_neighbors if nb[0] >= 0 and nb[1] >= 0 and nb[0] <= self.Nx-1 and nb[1] <= self.Ny-1]
@@ -34,20 +38,82 @@ class Mesh:
 
     def compute_integral_of_basis_function(self, x_index: int, y_index: int):
         
-        """ needed later to normalize the function """
+        """ computes the diagonal elements of \int \psi_i \psi_j """
 
-        # TO BE COMPLETED
-        return 1
+        if x_index < 0 or y_index < 0:
+            warnings.warn("Warning: negative index", UserWarning)
+            return 0
+        
+        if x_index >= self.Nx or y_index >= self.Ny:
+            warnings.warn("Warning: index out of range", UserWarning)
+            return 0
+
+        n_nb = len(self.find_neighbors(x_index, y_index)) # number of neighbors
+
+        """ first the case of elements within the grid, i.e. with 4 neighbors """
+        inte = 0 # here we will store the value of the integral, for the moment we just initialize it to 0 for clarity and debugging
+
+        if n_nb == 4:
+            inte = (self.x_pos[x_index] - self.x_pos[x_index - 1])*(self.y_pos[y_index + 1] - self.y_pos[y_index ])/6.
+            inte = inte + (self.x_pos[x_index + 1] - self.x_pos[x_index])*(self.y_pos[y_index + 1] - self.y_pos[y_index ])/12.
+            inte = inte + (self.x_pos[x_index + 1] - self.x_pos[x_index])*(self.y_pos[y_index] - self.y_pos[y_index - 1])/6.
+            inte = inte + (self.x_pos[x_index] - self.x_pos[x_index - 1])*(self.y_pos[y_index ] - self.y_pos[y_index - 1])/12.
+
+        elif x_index == 0: 
+            if y_index == 0: # one single triangle
+                inte = (self.x_pos[1] - self.x_pos[0])*(self.y_pos[1] - self.y_pos[0])/12.
+
+            elif y_index == self.Ny - 1: # two triangles
+                inte = (self.x_pos[1] - self.x_pos[0])*(self.y_pos[-1] - self.y_pos[-2])/6.
+
+            elif y_index != 0 and y_index != self.Ny-1: # three triangles
+                inte = (self.x_pos[1] - self.x_pos[0])*(self.y_pos[y_index + 1] - self.y_pos[y_index ])/12.
+                inte = inte + (self.x_pos[1] - self.x_pos[0])*(self.y_pos[y_index] - self.y_pos[y_index - 1])/6.
+        
+        elif x_index == self.Nx - 1:
+            if y_index == self.Ny - 1: # one single triangle
+                inte = (self.x_pos[-1] - self.x_pos[-2])*(self.y_pos[-1] - self.y_pos[-2])/12.
+
+            elif y_index == 0: # two triangles
+                inte = (self.x_pos[-1] - self.x_pos[-2])*(self.y_pos[1] - self.y_pos[0])/6.
+
+        elif x_index != 0 and x_index != self.Nx - 1 and y_index == 0: # three triangles
+            inte = (self.x_pos[x_index] - self.x_pos[x_index - 1])*(self.y_pos[1] - self.y_pos[0])/6.
+            inte = inte + (self.x_pos[x_index + 1] - self.x_pos[x_index])*(self.y_pos[1] - self.y_pos[0])/12.
+
+        elif x_index == self.Nx - 1 and y_index != self.Ny - 1 and y_index !=0: # three triangles
+            inte = (self.x_pos[-1] - self.x_pos[-2])*(self.y_pos[y_index] - self.y_pos[y_index - 1])/12.
+            inte = inte + (self.x_pos[-1] - self.x_pos[-2])*(self.y_pos[y_index + 1] - self.y_pos[y_index])/6.
+
+        elif x_index != self.Nx - 1 and x_index != 0 and y_index == self.Ny - 1: # three triangles
+            inte = (self.x_pos[x_index] - self.x_pos[x_index - 1])*(self.y_pos[-1] - self.y_pos[-2])/12.
+            inte = inte + (self.x_pos[x_index + 1] - self.x_pos[x_index])*(self.y_pos[-1] - self.y_pos[-2])/6.
+
+        return inte
+
+    def compute_product_basis_element(self, indices1, indices2):
+
+        x_index1, y_index1 = indices1
+        x_index2, y_index2 = indices2
+
+        """ computes the elements of the matrix for the \int \psi_i \psi_j, given two sets of indices """
+
+        """ if the two points are not neighbors, returns 0"""
+        if not ([x_index2, y_index2] in self.find_neighbors(x_index1, x_index2)):
+            return 0
+        
+        if indices1 == indices2:
+            """ in this case we use the function that we defined above """
+            return self.compute_integral_of_basis_function(x_index1, y_index1)
     
+        return 1 #TO BE FIXED AND COMPLETED    
 
-    def compute_derivative_basis_element(self, indices1, indices2):
+    def compute_der_x_basis_element(self, indices1, indices2):
 
         x_index1, y_index1 = indices1
         x_index2, y_index2 = indices2
 
         """ computes the elements of the matrix for the first derivative, given two sets of indices """
-        norm_1 = self.compute_integral_of_basis_function(x_index1, y_index1)
-        norm_2 = self.compute_integral_of_basis_function(x_index2, y_index2)
 
         """ if the two points are not neighbors, returns 0"""
         if not ([x_index2, y_index2] in self.find_neighbors(x_index1, x_index2)):
