@@ -4,8 +4,8 @@ from scipy.sparse import csr_matrix
 import matplotlib.pyplot as plt
 from numpy.linalg import norm
 
-x = np.linspace(0, 1, 150)
-y = np.linspace(0, 1, 150)
+x = np.linspace(0, 4, 200)
+y = np.linspace(0, 2, 100)
 
 mymesh = Mesh(x, y, verbose=True)
 mymesh.build_mass_matrix()
@@ -29,18 +29,21 @@ def is_sparse_symmetric(A: csr_matrix, tol: float = 1e-6) -> bool:
 func = lambda x,y: 2.0 * np.pi**2 * np.sin(np.pi * x) * np.sin(np.pi * y)
 diri = lambda x,y: 0
 
-"""
+
 res = mymesh.run_simulation_poisson_dirichlet(func, diri)
 
-plt.figure(figsize=(8, 6))
+print(np.shape(res))
+
+plt.figure(figsize=(12, 6))
 plt.imshow(res, cmap='viridis', origin='lower', aspect='auto', extent=[x.min(), x.max(), y.min(), y.max()]) # need origin "lower"
 plt.colorbar()
 plt.title('Poisson equation result - Dirichlet b.c.')
 plt.xlabel('$x$')
 plt.ylabel('$y$')
 plt.show()
-"""
 
+
+"""
 # now study the convergence
 
 Ns = [2**k for k in np.arange(2, 9)]
@@ -58,7 +61,7 @@ for k in range(len(Ns)):
             analytical_sol[m, j] = np.sin(np.pi * x[m]) * np.sin(np.pi * y[j])
 
     print(norm(analytical_sol))
-    relative_rests[k] = norm(analytical_sol - res)
+    relative_rests[k] = norm(analytical_sol.transpose() - res)/norm(analytical_sol)
 
 print(relative_rests)
 
@@ -69,3 +72,5 @@ plt.ylabel('Relative rest')
 plt.show()
 
 #strangely it seems to produce a perfect solution??
+
+"""

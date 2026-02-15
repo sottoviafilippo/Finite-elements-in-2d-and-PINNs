@@ -313,7 +313,8 @@ class Mesh:
 
         solu = spsolve(mat.tocsr(), rhs)
 
-        return solu.reshape((self.Nx, self.Ny))
+        # reshape and transpose (needed to plot correctly, with starting point "lower")
+        return solu.reshape((self.Nx, self.Ny)).transpose()
 
 
 
