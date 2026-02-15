@@ -1,7 +1,9 @@
 import numpy as np
 import warnings
-from scipy.sparse import lil_matrix, csr_matrix
+from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
+from collections.abc import Callable
+
 
 class Mesh:
     """
@@ -11,7 +13,7 @@ class Mesh:
     Uses a triangular mesh with linear elements.
     """
 
-    def __init__(self, x_positions: np.ndarray, y_positions: np.ndarray):
+    def __init__(self, x_positions: np.ndarray, y_positions: np.ndarray, verbose = False):
         """Initializes the class with position arrays and creates the grid."""
         self.x_pos = x_positions
         self.y_pos = y_positions
@@ -20,6 +22,12 @@ class Mesh:
         # Compute the number of grid points in both directions
         self.Nx = len(self.x_pos)
         self.Ny = len(self.y_pos)
+
+        self.verbose = verbose
+
+        # Variables to keep track of the construction of the matrices
+        self.M_built = False
+        self.S_built = False
 
     def find_neighbors(self, x_index: int, y_index: int):
         """Finds the list of neighbors of a given grid point."""
@@ -194,13 +202,13 @@ class Mesh:
         if not ([x_index2, y_index2] in self.find_neighbors(x_index1, y_index1)):
             return 0
     
-        elif y_index2 == y_index1 + 1: # neighbor above
+        elif y_index2 == y_index1 + 1 and x_index2 == x_index1: # neighbor above
             if self.check_in_grid(x_index1-1, y_index1+1):
                 inte = -(self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) / (self.y_pos[y_index1 + 1] - self.y_pos[y_index1]) / 2.0
             if self.check_in_grid(x_index1+1, y_index1+1):
                 inte = inte - (self.x_pos[x_index1 + 1] - self.x_pos[x_index1]) / (self.y_pos[y_index1+1] - self.y_pos[y_index1]) / 2.0
 
-        elif y_index2 == y_index1 - 1: # neighbor below
+        elif y_index2 == y_index1 - 1 and x_index2 == x_index1: # neighbor below
             if self.check_in_grid(x_index1-1, y_index1-1):
                 inte = -(self.x_pos[x_index1] - self.x_pos[x_index1 - 1]) / (self.y_pos[y_index1] - self.y_pos[y_index1 - 1]) / 2.0
             if self.check_in_grid(x_index1+1, y_index1-1):
@@ -208,7 +216,7 @@ class Mesh:
 
         return inte  
 
-    def build_mass_matrix(self, verbose = True):
+    def build_mass_matrix(self):
         """ builds the mass matrix using the functions defined above. Using sparse matrices"""
 
         #order: x0, y0 ... x0, yN ... x1,y0 ... etc
@@ -220,17 +228,86 @@ class Mesh:
                 total_index = self.Ny*i + j
                 
                 M[total_index, total_index] = self.compute_integral_of_basis_function(i, j)
-                neighbors = self.find_neighbors(i, j)
 
-                for neighbor in neighbors:
+                for neighbor in self.find_neighbors(i, j):
                     total_index_neighbor = self.Ny*neighbor[0] + neighbor[1]
                 
                     M[total_index, total_index_neighbor] = self.compute_product_basis_element([i, j], neighbor)
 
         self.M = M
+        self.M_built = True
 
-        if verbose:
+        if self.verbose:
             print("Mass matrix initialization completed")
+
+    def build_stiffness_matrix(self):
+        """ builds the stiffness matrix using the functions defined above. Using sparse matrices"""
+
+        #order: x0, y0 ... x0, yN ... x1,y0 ... etc
+        N = self.Nx * self.Ny
+        S = lil_matrix((N, N))
+
+        for i in range(0, self.Nx):
+            for j in range(0, self.Ny):
+                total_index = self.Ny*i + j
+                
+                S[total_index, total_index] = self.compute_integral_of_basis_function_dx(i, j) + self.compute_integral_of_basis_function_dy(i, j)
+ 
+                for neighbor in self.find_neighbors(i, j):
+                    total_index_neighbor = self.Ny*neighbor[0] + neighbor[1]
+                
+                    S[total_index, total_index_neighbor] = self.compute_product_basis_element_dx([i, j], neighbor) + self.compute_product_basis_element_dy([i, j], neighbor)
+
+        self.S = S
+        self.S_built = True
+
+        if self.verbose:
+            print("Stiffness matrix initialization completed")
+
+    def run_simulation_poisson_dirichlet(self, f: Callable[[float, float], float], g: Callable[[float, float], float]):
+        """ Solves the Poisson equation for function f on the rhs, on the given grid
+        i.e. find u so that Delta u = -f
+        here we use Dirichlet b.c. on the boundary, given by function g
+        """
+
+        # First build the load vector b
+        N = self.Nx * self.Ny
+        b = np.zeros(N)
+
+        for i in range(0, self.Nx):
+            for j in range(0, self.Ny):
+                total_index = self.Ny*i + j
+                b[total_index] = f(self.x_pos[i], self.y_pos[j])
+
+        rhs = self.M.dot(b)
+        mat = self.S
+
+        # Now plug in the Dirichlet boundary conditions
+        for i in [0, self.Nx-1]:
+            for j in range(0, self.Ny):
+                total_index = self.Ny*i + j
+                b[total_index] = g(self.x_pos[i], self.y_pos[j])
+        
+        for j in [0, self.Ny-1]:
+            for i in range(1, self.Ny - 1):
+                total_index = self.Ny*i + j
+                b[total_index] = g(self.x_pos[i], self.y_pos[j])
+
+        for i in [0, self.Nx-1]:
+            for j in range(0, self.Ny):
+                total_index = self.Ny*i + j
+                mat[total_index, :] = 0
+                mat[total_index, total_index] = 1
+        
+        for j in [0, self.Ny-1]:
+            for i in range(1, self.Ny - 1):
+                total_index = self.Ny*i + j
+                mat[total_index, :] = 0
+                mat[total_index, total_index] = 1
+
+        solu = spsolve(mat.tocsr(), rhs)
+
+        return solu.reshape((self.Nx, self.Ny))
 
 
 
@@ -238,6 +315,5 @@ class Mesh:
 # SCRIVERE OUTPUT IN FILE LOG
 # ALLA FINE CURARE ESTETICA DEL CODICE
 
-# names : mass matrix and stiffness matrix (derivatives)
 # termini con derivate prime: advection equation; va stabilizzata
 # should speed up M matrix initialization by considering symmetry
