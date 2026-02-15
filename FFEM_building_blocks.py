@@ -270,6 +270,12 @@ class Mesh:
         here we use Dirichlet b.c. on the boundary, given by function g
         """
 
+        if not self.M_built:
+            self.build_mass_matrix()
+
+        if not self.S_built:
+            self.build_stiffness_matrix()
+
         # First build the load vector b
         N = self.Nx * self.Ny
         b = np.zeros(N)
@@ -289,7 +295,7 @@ class Mesh:
                 b[total_index] = g(self.x_pos[i], self.y_pos[j])
         
         for j in [0, self.Ny-1]:
-            for i in range(1, self.Ny - 1):
+            for i in range(1, self.Nx - 1):
                 total_index = self.Ny*i + j
                 b[total_index] = g(self.x_pos[i], self.y_pos[j])
 
@@ -300,7 +306,7 @@ class Mesh:
                 mat[total_index, total_index] = 1
         
         for j in [0, self.Ny-1]:
-            for i in range(1, self.Ny - 1):
+            for i in range(1, self.Nx - 1):
                 total_index = self.Ny*i + j
                 mat[total_index, :] = 0
                 mat[total_index, total_index] = 1
@@ -313,7 +319,6 @@ class Mesh:
 
 # IDEA LUNGO TERMINE : INCLUDERE IDEE CORSO CNAM TIPO PINN. MA PRIMA FARE TEST DELLA CORRETTEZZA DELLA MESH
 # SCRIVERE OUTPUT IN FILE LOG
-# ALLA FINE CURARE ESTETICA DEL CODICE
 
 # termini con derivate prime: advection equation; va stabilizzata
 # should speed up M matrix initialization by considering symmetry

@@ -2,9 +2,10 @@ import numpy as np
 from FFEM_building_blocks import Mesh
 from scipy.sparse import csr_matrix
 import matplotlib.pyplot as plt
+from numpy.linalg import norm
 
-x = np.linspace(0, 1, 100)
-y = np.linspace(0, 1, 100)
+x = np.linspace(0, 1, 150)
+y = np.linspace(0, 1, 150)
 
 mymesh = Mesh(x, y, verbose=True)
 mymesh.build_mass_matrix()
@@ -27,6 +28,7 @@ def is_sparse_symmetric(A: csr_matrix, tol: float = 1e-6) -> bool:
 func = lambda x,y: 2.0 * np.pi**2 * np.sin(np.pi * x) * np.sin(np.pi * y)
 diri = lambda x,y: 0
 
+"""
 res = mymesh.run_simulation_poisson_dirichlet(func, diri)
 
 plt.figure(figsize=(8, 6))
@@ -35,5 +37,34 @@ plt.colorbar()
 plt.title('Poisson equation result - Dirichlet b.c.')
 plt.xlabel('$x$')
 plt.ylabel('$y$')
-
 plt.show()
+"""
+
+# now study the convergence
+
+Ns = [2**k for k in np.arange(2, 9)]
+relative_rests = np.zeros_like(Ns)
+
+for k in range(len(Ns)):
+    print(Ns[k])
+    x = np.linspace(0, 1, Ns[k])
+    y = np.linspace(0, 1, Ns[k])
+    mymesh = Mesh(x, y, verbose=False)
+    res = mymesh.run_simulation_poisson_dirichlet(func, diri)
+    analytical_sol = np.zeros_like(res)
+    for m in range(len(x)):
+        for j in range(len(y)):
+            analytical_sol[m, j] = np.sin(np.pi * x[m]) * np.sin(np.pi * y[j])
+
+    print(norm(analytical_sol))
+    relative_rests[k] = norm(analytical_sol - res)
+
+print(relative_rests)
+
+plt.figure()
+plt.loglog(Ns, relative_rests)
+plt.xlabel('$N$')
+plt.ylabel('Relative rest')
+plt.show()
+
+#strangely it seems to produce a perfect solution??
