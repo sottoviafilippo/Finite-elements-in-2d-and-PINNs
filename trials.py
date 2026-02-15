@@ -26,4 +26,3 @@ print(is_sparse_symmetric(mymesh.M))
 print(mymesh.M.toarray())
 
 
-# TO DO: MATRICE NON SIMMETRICA PER COLPA DI (PARE) UN SOLO PUNTO, che sembra saltato. RISOLVERE

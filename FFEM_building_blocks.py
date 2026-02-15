@@ -37,7 +37,7 @@ class Mesh:
             [x_index, y_index + 1], 
             [x_index + 1, y_index], 
             [x_index, y_index - 1],
-            [x_index - 1, y_index - 1]
+            [x_index + 1, y_index - 1]
         ]
 
         # Only return elements within the grid boundaries
