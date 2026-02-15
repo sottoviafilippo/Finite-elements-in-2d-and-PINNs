@@ -1,5 +1,7 @@
 import numpy as np
 import warnings
+from scipy.sparse import lil_matrix, csr_matrix
+from scipy.sparse.linalg import spsolve
 
 class Mesh:
     """
@@ -206,11 +208,31 @@ class Mesh:
 
         return inte  
 
+    def build_mass_matrix(self, verbose = True):
+        """ builds the mass matrix using the functions defined above. Using sparse matrices"""
+
+        #order: x0, y0 ... x0, yN ... x1,y0 ... etc
+        N = self.Nx * self.Ny
+        M = lil_matrix((N, N))
+
+        for i in range(0, self.Nx):
+            for j in range(0, self.Ny):
+                total_index = self.Ny*i + j
+                
+                M[total_index, total_index] = self.compute_integral_of_basis_function(i, j)
+                neighbors = self.find_neighbors(i, j)
+
+                for neighbor in neighbors:
+                    total_index_neighbor = self.Ny*neighbor[0] + neighbor[1]
+                
+                    M[total_index, total_index_neighbor] = self.compute_product_basis_element([i, j], neighbor)
+
+        self.M = M
+
+        if verbose:
+            print("Mass matrix initialization completed")
 
 
-# TO DO: USE SPARSE MATRICES TO BUILD MATRICES THAT WILL GO INTO FINAL EQUATION
-# ONE SHOULD ACCEPT A GENERAL EQUATION, WITH GIVEN COEFFICIENTS FOR THE VARIOUS OPERATORS
-# PER LE DERIVATE DIFFERENZIARE X E Y (CHECK)
 
 # IDEA LUNGO TERMINE : INCLUDERE IDEE CORSO CNAM TIPO PINN. MA PRIMA FARE TEST DELLA CORRETTEZZA DELLA MESH
 # SCRIVERE OUTPUT IN FILE LOG
@@ -218,3 +240,4 @@ class Mesh:
 
 # names : mass matrix and stiffness matrix (derivatives)
 # termini con derivate prime: advection equation; va stabilizzata
+# should speed up M matrix initialization by considering symmetry
