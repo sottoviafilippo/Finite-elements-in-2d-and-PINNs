@@ -37,7 +37,7 @@ For the stiffness matrix $\int \nabla \psi_i \nabla \psi_j$ we perform similar c
 
 We set up the matrices as sparse matrices for better efficiency.
 
-# How to use this code
+# How to use this code - Poisson equation
 An example is provided in the file trials.py.
 
 For the moment we can simulate the Poisson equation with Dirichlet boundary conditions. The function "run_simulation_poisson_dirichlet" takes the source function and the function giving the boundary conditions as arguments.
@@ -46,3 +46,8 @@ For the moment we can simulate the Poisson equation with Dirichlet boundary cond
 - One then initializes the mesh with the constructor Mesh(x, y), e.g. mymesh = Mesh(x, y)
 - One then computes the solution with mymesh.run_simulation_poisson_dirichlet(func, diri)
 - The solution is given as a 2d array, ready for plotting (for example as a colormap).
+
+# How to use this code - Heat equation
+
+SECTION TO BE COMPLETED
+Note that for stability we need a good number of timesteps. The requirement seems to be well above the one posed by the CFL condition.

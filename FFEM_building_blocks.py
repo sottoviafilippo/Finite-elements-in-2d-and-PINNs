@@ -316,10 +316,14 @@ class Mesh:
         # reshape and transpose (needed to plot correctly, with starting point "lower")
         return solu.reshape((self.Nx, self.Ny)).transpose()
 
+    def compute_time_derivative_heat_equation(self, u: np.ndarray, alpha = 1):
+        """ Computes the time derivative accordine to the weak form of the heat equation"""
+
+        rhs = -alpha * self.S.dot(u)
+        solu = spsolve(self.M.tocsr(), rhs)
+    
+        # return solu.reshape((self.Nx, self.Ny)).transpose()
+        return solu
 
 
-# IDEA LUNGO TERMINE : INCLUDERE IDEE CORSO CNAM TIPO PINN. MA PRIMA FARE TEST DELLA CORRETTEZZA DELLA MESH
-# SCRIVERE OUTPUT IN FILE LOG
 
-# termini con derivate prime: advection equation; va stabilizzata
-# should speed up M matrix initialization by considering symmetry

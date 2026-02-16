@@ -2,7 +2,8 @@ import numpy as np
 from FFEM_building_blocks import Mesh
 from scipy.sparse import csr_matrix
 import matplotlib.pyplot as plt
-from numpy.linalg import norm
+# from numpy.linalg import norm
+from matplotlib.animation import FFMpegWriter, FuncAnimation
 
 x = np.linspace(0, 4, 200)
 y = np.linspace(0, 2, 100)
@@ -74,3 +75,73 @@ plt.show()
 #strangely it seems to produce a perfect solution??
 
 """
+
+
+# application: the heat equation.
+# consider a square geometry. the edges are kept at a constant temperature of 100 °C.
+# the starting temperature is 0 °C inside the surface
+
+Nx = Ny = 100
+
+x = np.linspace(0, 1, Nx)
+y = np.linspace(0, 1, Ny)
+
+# initialize the starting temperature (20) and the boundary temperature (100)
+u0 = 20.0 + np.zeros(Nx*Ny)
+for i in [0, Nx-1]:
+    for j in range(0, Ny):
+                u0[Ny*i + j] = 100
+        
+for j in [0, Ny-1]:
+    for i in range(1, Nx - 1):
+                u0[Ny*i + j] = 100
+
+u = u0.copy()
+
+# check initial conditions
+plt.figure(figsize=(12, 6))
+plt.imshow(u.reshape((Nx, Ny)).transpose(), cmap='viridis', origin='lower', aspect='auto', extent=[x.min(), x.max(), y.min(), y.max()]) # need origin "lower"
+plt.colorbar()
+plt.title('Poisson equation result - Dirichlet b.c.')
+plt.xlabel('$x$')
+plt.ylabel('$y$')
+plt.show()
+
+mymesh = Mesh(x, y, verbose=True)
+mymesh.build_mass_matrix()
+mymesh.build_stiffness_matrix()
+
+steps = 1000
+times, dt = np.linspace(0, 0.1, steps, retstep = True)
+
+fig, ax = plt.subplots()
+im = ax.imshow(u.reshape((Nx, Ny)).transpose(), cmap='magma', animated=True, interpolation='bilinear')
+ax.set_title("2D Heat Equation Evolution")
+plt.colorbar(im, label='Temperature')
+
+def update(frame):
+    
+    # first approach: explicit Euler in time for simplicity
+    # use the dedicated function defined in the Mesh class
+    global u
+    unew = u.copy()
+    unew = unew + dt * mymesh.compute_time_derivative_heat_equation(unew, alpha = 0.01)
+    # CFL condition dt <= 1/4(alpha). In practice one needs to be more restrictive
+
+    # impose b.c. at every time (constant temperature on the edge)
+    for i in [0, Nx-1]:
+        for j in range(0, Ny):
+                unew[Ny*i + j] = 100
+    for j in [0, Ny-1]:
+        for i in range(1, Nx - 1):
+                unew[Ny*i + j] = 100
+
+    u = unew
+    im.set_array(u.reshape((Nx, Ny)).transpose()) # Update the image data for this frame
+    return [im]
+
+ani = FuncAnimation(fig, update, frames=steps, interval=50, blit=True)
+writer = FFMpegWriter(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+ani.save("heat_equation.mp4", writer=writer)
+
+plt.show()
