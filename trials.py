@@ -98,7 +98,7 @@ for j in [0, Ny-1]:
 
 u = u0.copy()
 
-# check initial conditions
+# plot initial conditions for a check
 plt.figure(figsize=(12, 6))
 plt.imshow(u.reshape((Nx, Ny)).transpose(), cmap='viridis', origin='lower', aspect='auto', extent=[x.min(), x.max(), y.min(), y.max()]) # need origin "lower"
 plt.colorbar()
@@ -140,8 +140,10 @@ def update(frame):
     im.set_array(u.reshape((Nx, Ny)).transpose()) # Update the image data for this frame
     return [im]
 
+# now produce the animation
 ani = FuncAnimation(fig, update, frames=steps, interval=50, blit=True)
 writer = FFMpegWriter(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+# save the animation in mp4 format
 ani.save("heat_equation.mp4", writer=writer)
 
 plt.show()
