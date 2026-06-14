@@ -4,7 +4,7 @@
 import numpy as np
 
 
-class PINN_heat_2d:
+class PINN_heat_3d:
     """
-    PINN for 2d heat equation
+    PINN for 2+1d heat equation
     """
