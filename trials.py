@@ -77,7 +77,7 @@ plt.show()
 """
 
 
-# application: the heat equation.
+# application: the heat equation. (with Dirichlet boundary conditions)
 # consider a square geometry. the edges are kept at a constant temperature of 100 °C.
 # the starting temperature is 0 °C inside the surface
 
