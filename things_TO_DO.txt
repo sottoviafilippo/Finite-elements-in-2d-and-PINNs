@@ -1,10 +1,8 @@
-SCRIVERE OUTPUT IN FILE LOG
+Write output in log file
 
-termini con derivate prime: advection equation; va stabilizzata
-should speed up M matrix initialization by considering symmetry
+should speed up M matrix initialisation by considering symmetry
 
 
-next step: consider time evolution : for instance heat equation
-look up course and come up with cool techniques to simplify the resolution of the equation
+come up with techniques to simplify the resolution of the equation
 eventually write down some PINNs
 
