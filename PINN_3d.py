@@ -8,3 +8,5 @@ class PINN_heat_3d:
     """
     PINN for 2+1d heat equation
     """
+
+    # initialisation: see Glorot initilisation (good for tanh/sigmoid)
