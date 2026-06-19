@@ -1,8 +1,10 @@
-# A 2d demonstration of the finite element method
+# A 2d demonstration of the finite element method. And a demonstration of PINNs, applied to the heat equations
 
 The Mesh class creates a 2d finite element structured mesh, with linear functions. 
 
 The main limitation is that in order to generate a mesh one has to give a set of nodes in x-direction and a set of nodes in y-direction. It will not be possible, for example, to have a finer mesh in x-direction only in a given y range. This choice was taken for simplicity's sake. Future versions of this code might work with less uniform meshes.
+
+The PINNs are built with PyTorch. Work in progress.
 
 # A quick overview of the maths : building the mass and stiffness matrices.
 
