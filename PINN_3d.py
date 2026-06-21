@@ -45,7 +45,7 @@ class PINN_Poisson_2d:
         lower_bounds = [x_min, y_min]
         upper_bounds = [x_max, y_max]
 
-        self.collocation_points = qmc.scale(standard_samples, lower_bounds, upper_bounds)
+        self.collocation_points = torch.tensor(qmc.scale(standard_samples, lower_bounds, upper_bounds), dtype=torch.float32, requires_grad=True)
 
         pass 
 
@@ -59,9 +59,9 @@ class PINN_Poisson_2d:
         N_points_horizontal = int(np.abs((x_max - x_min)/(x_max - x_min + y_max - y_min))*N_boundary_points/2)
         N_points_vertical   = int(N_boundary_points/2) - N_points_horizontal
  
-        self.boundary_points = [[random.uniform(x_min, x_max), y_min] for k in range(N_points_horizontal)] + [[random.uniform(x_min, x_max), y_max] for k in range(N_points_horizontal)] + [[x_min, random.uniform(y_min, y_max)] for k in range(N_points_vertical)] + [[x_max, random.uniform(y_min, y_max)] for k in range(N_points_vertical)]
-        self.boundary_values = [self.f_dirichlet(p) for p in self.boundary_points]
-        
+        self.boundary_points = torch.tensor([[random.uniform(x_min, x_max), y_min] for k in range(N_points_horizontal)] + [[random.uniform(x_min, x_max), y_max] for k in range(N_points_horizontal)] + [[x_min, random.uniform(y_min, y_max)] for k in range(N_points_vertical)] + [[x_max, random.uniform(y_min, y_max)] for k in range(N_points_vertical)], dtype=torch.float32)
+        self.boundary_values = torch.tensor([self.f_dirichlet(p) for p in self.boundary_points], dtype=torch.float32)
+
         pass
 
     def compute_physics_loss(self):
