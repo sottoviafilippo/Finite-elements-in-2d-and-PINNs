@@ -5,8 +5,12 @@ import matplotlib.pyplot as plt
 # from numpy.linalg import norm
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 
+
+
 x = np.linspace(0, 4, 200)
 y = np.linspace(0, 2, 100)
+
+
 
 mymesh = Mesh(x, y, verbose=True)
 mymesh.build_mass_matrix()
@@ -41,7 +45,7 @@ plt.colorbar()
 plt.title('Poisson equation result - Dirichlet b.c.')
 plt.xlabel('$x$')
 plt.ylabel('$y$')
-plt.show()
+plt.savefig('results/poisson.png')
 
 
 """
@@ -105,7 +109,7 @@ plt.colorbar()
 plt.title('Poisson equation result - Dirichlet b.c.')
 plt.xlabel('$x$')
 plt.ylabel('$y$')
-plt.show()
+plt.savefig('results/initial_conditions.png')
 
 mymesh = Mesh(x, y, verbose=True)
 mymesh.build_mass_matrix()
@@ -144,6 +148,6 @@ def update(frame):
 ani = FuncAnimation(fig, update, frames=steps, interval=50, blit=True)
 writer = FFMpegWriter(fps=30, metadata=dict(artist='Me'), bitrate=1800)
 # save the animation in mp4 format
-ani.save("heat_equation.mp4", writer=writer)
+ani.save("results/heat_equation.mp4", writer=writer)
 
 plt.show()
