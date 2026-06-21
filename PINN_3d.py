@@ -61,10 +61,11 @@ class PINN_Poisson_2d:
  
         self.boundary_points = [[random.uniform(x_min, x_max), y_min] for k in range(N_points_horizontal)] + [[random.uniform(x_min, x_max), y_max] for k in range(N_points_horizontal)] + [[x_min, random.uniform(y_min, y_max)] for k in range(N_points_vertical)] + [[x_max, random.uniform(y_min, y_max)] for k in range(N_points_vertical)]
         self.boundary_values = [self.f_dirichlet(p) for p in self.boundary_points]
+        
         pass
 
     def compute_physics_loss(self):
-        """Computes the physics loss based on the Poisson equation d_xx u + d_yy u = f"""
+        """Computes the physics loss based on the Poisson equation d_xx u + d_yy u = f_poisson"""
 
 class PINN_heat_2d:
 
