@@ -15,7 +15,7 @@ class PINN_Poisson_2d:
 
     def __init__(self, N_internal_nodes: int, f_poisson: Callable, f_dirichlet: Callable):
         """
-        Poisson equation: d_xx u + d_yy u = f_poisson. Dirichlet b.c.: u(bdy) = f_dirichlet
+        Poisson equation: d_xx u + d_yy u = -f_poisson. Dirichlet b.c.: u(bdy) = f_dirichlet
         """
         # first version: 3 internal layers, hardcoded for the sake of simplicity
         self.N_internal_nodes = N_internal_nodes
@@ -32,6 +32,8 @@ class PINN_Poisson_2d:
             nn.Tanh(),
             nn.Linear(32, 1)
         )
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
 
         pass
 
@@ -62,7 +64,7 @@ class PINN_Poisson_2d:
         N_points_vertical   = int(N_boundary_points/2) - N_points_horizontal
  
         self.boundary_points = [[random.uniform(x_min, x_max), y_min] for k in range(N_points_horizontal)] + [[random.uniform(x_min, x_max), y_max] for k in range(N_points_horizontal)] + [[x_min, random.uniform(y_min, y_max)] for k in range(N_points_vertical)] + [[x_max, random.uniform(y_min, y_max)] for k in range(N_points_vertical)]
-        self.boundary_values = torch.tensor([self.f_dirichlet(p) for p in self.boundary_points], dtype=torch.float32)
+        self.boundary_values = torch.tensor([self.f_dirichlet(p) for p in self.boundary_points], dtype=torch.float32).reshape(-1, 1)
         self.boundary_points = torch.tensor(self.boundary_points, dtype=torch.float32) # don't need requires_grad = True here, since these are Dirichlet b.c.
 
         pass
@@ -83,17 +85,37 @@ class PINN_Poisson_2d:
 
         f = self.f_poisson(self.collocation_points)  # note that f_Poisson should be defined with torch functions
 
-        return torch.mean((u_xx + u_yy - f) ** 2)
+        return torch.mean((u_xx + u_yy + f) ** 2) # laplacian = -f (beware of sign)
     
     def compute_dirichlet_loss(self):
 
-        pass
+        criterion = nn.MSELoss()
+        predictions = self.model(self.boundary_points)
 
-    def compute_total_loss(self, coeff = 1.):
-    
-        return self.compute_physics_loss() + self.compute_dirichlet_loss()
+        return criterion(predictions, self.boundary_values)
 
 
+    def train(self, N_epochs, weight_bdy = 10.):
+
+        self.physics_losses = []
+        self.dirichlet_losses = []
+        self.epochs = []
+
+        for epoch in range(N_epochs):
+            self.epochs.append(epoch + 1)
+            phys_loss = self.compute_physics_loss()
+            bdy_loss = self.compute_dirichlet_loss()
+            loss = phys_loss + weight_bdy * bdy_loss
+
+            self.optimizer.zero_grad() 
+            loss.backward() 
+            self.optimizer.step() 
+
+            self.physics_losses.append(phys_loss.item())
+            self.dirichlet_losses.append(bdy_loss.item())
+
+            if (epoch + 1) % 1000 == 0:
+                print(f"Epoch [{epoch+1}/{N_epochs}], Loss: {loss.item():.4f}")
 
 
 
