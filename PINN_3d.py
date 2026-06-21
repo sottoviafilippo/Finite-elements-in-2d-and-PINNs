@@ -18,8 +18,9 @@ class PINN_Poisson_2d:
         Poisson equation: d_xx u + d_yy u = f_poisson. Dirichlet b.c.: u(bdy) = f_dirichlet
         """
         # first version: 3 internal layers, hardcoded for the sake of simplicity
-        self.N_internal_nodes  = N_internal_nodes
+        self.N_internal_nodes = N_internal_nodes
         self.f_dirichlet = f_dirichlet
+        self.f_poisson = f_poisson
 
         # Why Tanh? for instance ReLU would not work since its second derivatives vanish (and the Poisson equation is built on them)
         self.model = nn.Sequential(
@@ -56,16 +57,46 @@ class PINN_Poisson_2d:
 
         x_min, x_max = x_bounds
         y_min, y_max = y_bounds
+        # maybe one should also add cornerns for strict boundary enforcement?
         N_points_horizontal = int(np.abs((x_max - x_min)/(x_max - x_min + y_max - y_min))*N_boundary_points/2)
         N_points_vertical   = int(N_boundary_points/2) - N_points_horizontal
  
-        self.boundary_points = torch.tensor([[random.uniform(x_min, x_max), y_min] for k in range(N_points_horizontal)] + [[random.uniform(x_min, x_max), y_max] for k in range(N_points_horizontal)] + [[x_min, random.uniform(y_min, y_max)] for k in range(N_points_vertical)] + [[x_max, random.uniform(y_min, y_max)] for k in range(N_points_vertical)], dtype=torch.float32)
+        self.boundary_points = [[random.uniform(x_min, x_max), y_min] for k in range(N_points_horizontal)] + [[random.uniform(x_min, x_max), y_max] for k in range(N_points_horizontal)] + [[x_min, random.uniform(y_min, y_max)] for k in range(N_points_vertical)] + [[x_max, random.uniform(y_min, y_max)] for k in range(N_points_vertical)]
         self.boundary_values = torch.tensor([self.f_dirichlet(p) for p in self.boundary_points], dtype=torch.float32)
+        self.boundary_points = torch.tensor(self.boundary_points, dtype=torch.float32) # don't need requires_grad = True here, since these are Dirichlet b.c.
 
         pass
 
     def compute_physics_loss(self):
         """Computes the physics loss based on the Poisson equation d_xx u + d_yy u = f_poisson"""
+
+        u = self.model(self.collocation_points)
+
+        # first compute the first derivatives
+        grad_u = torch.autograd.grad(outputs=u, inputs=self.collocation_points, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True)[0]
+        u_x = grad_u[:, 0:1]
+        u_y = grad_u[:, 1:2]
+
+        # now compute the second derivatives
+        u_xx = torch.autograd.grad(outputs=u_x, inputs=self.collocation_points, grad_outputs=torch.ones_like(u_x),create_graph=True, retain_graph=True)[0][:, 0:1]
+        u_yy = torch.autograd.grad(outputs=u_y, inputs=self.collocation_points, grad_outputs=torch.ones_like(u_y),create_graph=True, retain_graph=True)[0][:, 1:2]
+
+        f = self.f_poisson(self.collocation_points)  # note that f_Poisson should be defined with torch functions
+
+        return torch.mean((u_xx + u_yy - f) ** 2)
+    
+    def compute_dirichlet_loss(self):
+
+        pass
+
+    def compute_total_loss(self, coeff = 1.):
+    
+        return self.compute_physics_loss() + self.compute_dirichlet_loss()
+
+
+
+
+
 
 class PINN_heat_2d:
 
