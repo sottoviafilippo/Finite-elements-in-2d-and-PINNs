@@ -121,10 +121,37 @@ class PINN_Poisson_2d:
 
 
 class PINN_heat_2d:
+    """Solve the heat equation in 2 spatial dimensions + time"""
 
-    def __init__(self):
+    def __init__(self, N_internal_nodes: int, f_initial: Callable, f_boundary: Callable, alpha: float = 1):
+        """
+        Heat equation: alpha(d_xx u + d_yy u) = d-t u. Dirichlet b.c.: u(boundary) = f(boundary) at all times. Initial b.c.: u(t=0) = f_initial
+        """
+        # first version: 4 internal layers, hardcoded for the sake of simplicity
+        # Larger network than for the 2d Poisson equation.
+        self.N_internal_nodes = N_internal_nodes
+        self.f_boundary = f_boundary
+        self.f_initial = f_initial
+         
+        self.model = nn.Sequential(
+            nn.Linear(3, 48),  
+            nn.Tanh(),         
+            nn.Linear(48, 48),  
+            nn.Tanh(),
+            nn.Linear(48, 48),
+            nn.Tanh(),
+            nn.Linear(48, 48),  
+            nn.Tanh(),
+            nn.Linear(48, 1)
+        )
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
+
         pass
 
 
 
-    
+
+# TO DO: optimal dimensions (number of layers and nodes) for both cases
+# what is the optimal number of collocation and boundary points?
+# what weight should be given to the boundary loss?  
