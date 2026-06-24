@@ -24,13 +24,13 @@ class PINN_Poisson_2d:
 
         # Why Tanh? for instance ReLU would not work since its second derivatives vanish (and the Poisson equation is built on them)
         self.model = nn.Sequential(
-            nn.Linear(2, 32),  
+            nn.Linear(2, N_internal_nodes),  
             nn.Tanh(),         
-            nn.Linear(32, 32),  
+            nn.Linear(N_internal_nodes, N_internal_nodes),  
             nn.Tanh(),
-            nn.Linear(32, 32),  
+            nn.Linear(N_internal_nodes, N_internal_nodes),  
             nn.Tanh(),
-            nn.Linear(32, 1)
+            nn.Linear(N_internal_nodes, 1)
         )
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
@@ -120,29 +120,32 @@ class PINN_Poisson_2d:
 
 
 
+
 class PINN_heat_2d:
     """Solve the heat equation in 2 spatial dimensions + time"""
 
-    def __init__(self, N_internal_nodes: int, f_initial: Callable, f_boundary: Callable, alpha: float = 1):
+    def __init__(self, N_internal_nodes: int, f_initial: Callable, f_dirichlet: Callable, alpha: float = 1):
         """
-        Heat equation: alpha(d_xx u + d_yy u) = d-t u. Dirichlet b.c.: u(boundary) = f(boundary) at all times. Initial b.c.: u(t=0) = f_initial
+        Heat equation: alpha(d_xx u + d_yy u) = d_t u. Dirichlet b.c.: u(boundary) = f(boundary) at all times. Initial b.c.: u(t=0) = f_initial
         """
         # first version: 4 internal layers, hardcoded for the sake of simplicity
         # Larger network than for the 2d Poisson equation.
         self.N_internal_nodes = N_internal_nodes
-        self.f_boundary = f_boundary
+        self.f_dirichlet = f_dirichlet
         self.f_initial = f_initial
+        self.alpha = alpha
          
+        # input order: x, y, t
         self.model = nn.Sequential(
-            nn.Linear(3, 48),  
+            nn.Linear(3, N_internal_nodes),  
             nn.Tanh(),         
-            nn.Linear(48, 48),  
+            nn.Linear(N_internal_nodes, N_internal_nodes),  
             nn.Tanh(),
-            nn.Linear(48, 48),
+            nn.Linear(N_internal_nodes, N_internal_nodes),
             nn.Tanh(),
-            nn.Linear(48, 48),  
+            nn.Linear(N_internal_nodes, N_internal_nodes),  
             nn.Tanh(),
-            nn.Linear(48, 1)
+            nn.Linear(N_internal_nodes, 1)
         )
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
@@ -150,7 +153,122 @@ class PINN_heat_2d:
         pass
 
 
+    def set_collocation_points(self, N_collocation_points: int, x_bounds: tuple, y_bounds: tuple, t_bounds: tuple):
+        """Sets the collocation points to be later used in the optimization procedure"""
 
+        sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
+        standard_samples = sampler.random(n = N_collocation_points)
+
+        x_min, x_max = x_bounds
+        y_min, y_max = y_bounds
+        t_min, t_max = t_bounds
+        lower_bounds = [x_min, y_min, t_min]
+        upper_bounds = [x_max, y_max, t_max]
+
+        self.collocation_points = torch.tensor(qmc.scale(standard_samples, lower_bounds, upper_bounds), dtype=torch.float32, requires_grad=True)
+
+        pass 
+
+
+    def compute_boundary_values(self, N_boundary_points: int, x_bounds: tuple, y_bounds: tuple, t_bounds: tuple):
+        """Computes the boundary data used later in the optimization process, in order to impose the Dirichlet b.c. 
+        Same number of points on every segment
+        """
+
+        x_min, x_max = x_bounds
+        y_min, y_max = y_bounds
+        t_min, t_max = t_bounds
+        
+        # number of points on each side proportional to the side lengths. May pose some problems if one side is much shorter
+        N_points_horizontal = int(np.abs((x_max - x_min)/(x_max - x_min + y_max - y_min))*N_boundary_points/2)
+        N_points_vertical   = int(N_boundary_points/2) - N_points_horizontal
+ 
+        self.boundary_points = [[random.uniform(x_min, x_max), y_min, random.uniform(t_min, t_max)] for k in range(N_points_horizontal)] + [[random.uniform(x_min, x_max), y_max, random.uniform(t_min, t_max)] for k in range(N_points_horizontal)] + [[x_min, random.uniform(y_min, y_max), random.uniform(t_min, t_max)] for k in range(N_points_vertical)] + [[x_max, random.uniform(y_min, y_max), random.uniform(t_min, t_max)] for k in range(N_points_vertical)]
+        self.boundary_values = torch.tensor([self.f_dirichlet(p) for p in self.boundary_points], dtype=torch.float32).reshape(-1, 1)
+        self.boundary_points = torch.tensor(self.boundary_points, dtype=torch.float32) # don't need requires_grad = True here, since these are Dirichlet b.c.
+
+        pass
+
+
+    def compute_initial_values(self, N_initial_points: int, x_bounds: tuple, y_bounds: tuple, t_min: float):
+        """Initial conditions at t=t_min (typically t=0)
+        """
+
+        sampler = qmc.LatinHypercube(d=2)  # 2+1d model, 2 spatial dimensions
+        standard_samples = sampler.random(n=N_initial_points)
+
+        x_min, x_max = x_bounds
+        y_min, y_max = y_bounds
+        lower_bounds = [x_min, y_min]
+        upper_bounds = [x_max, y_max]
+
+        scaled_samples = qmc.scale(standard_samples, lower_bounds, upper_bounds)
+
+        t_col = np.full((N_initial_points, 1), t_min) # add t_min because these are the initial conditions
+        scaled_samples_with_t = np.hstack([scaled_samples, t_col])
+       
+        self.initial_values = torch.tensor([self.f_initial(p) for p in scaled_samples_with_t], dtype=torch.float32).reshape(-1, 1)
+        self.initial_points = torch.tensor(scaled_samples_with_t, dtype=torch.float32, requires_grad=True)
+
+
+    def compute_physics_loss(self):
+        """Computes the physics loss based on the heat equation alpha(d_xx u + d_yy u) - d_t u = 0"""
+
+        u = self.model(self.collocation_points)
+
+        # first compute the first derivatives
+        grad_u = torch.autograd.grad(outputs=u, inputs=self.collocation_points, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True)[0]
+        u_x = grad_u[:, 0:1]
+        u_y = grad_u[:, 1:2]
+        u_t = grad_u[:, 2:3]
+
+        # now compute the second derivatives
+        u_xx = torch.autograd.grad(outputs=u_x, inputs=self.collocation_points, grad_outputs=torch.ones_like(u_x),create_graph=True, retain_graph=True)[0][:, 0:1]
+        u_yy = torch.autograd.grad(outputs=u_y, inputs=self.collocation_points, grad_outputs=torch.ones_like(u_y),create_graph=True, retain_graph=True)[0][:, 1:2]
+
+        return torch.mean((self.alpha * (u_xx + u_yy) - u_t) ** 2) # beware of sign
+
+
+    def compute_dirichlet_loss(self):
+
+        criterion = nn.MSELoss()
+        predictions = self.model(self.boundary_points)
+
+        return criterion(predictions, self.boundary_values)
+    
+
+    def compute_initial_loss(self):
+        """loss corresponding to the initial conditions at t = t_min"""
+
+        criterion = nn.MSELoss()
+        predictions = self.model(self.initial_points)
+
+        return criterion(predictions, self.initial_values)
+
+
+    def train(self, N_epochs, weight_bdy = 10., weight_in = 10.):
+
+        self.physics_losses = []
+        self.dirichlet_losses = []
+        self.initial_losees = []
+        self.epochs = []
+
+        for epoch in range(N_epochs):
+            self.epochs.append(epoch + 1)
+            phys_loss = self.compute_physics_loss()
+            bdy_loss = self.compute_dirichlet_loss()
+            in_loss = self.compute_initial_loss()
+            loss = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
+
+            self.optimizer.zero_grad() 
+            loss.backward() 
+            self.optimizer.step() 
+
+            self.physics_losses.append(phys_loss.item())
+            self.dirichlet_losses.append(bdy_loss.item())
+
+            if (epoch + 1) % 1000 == 0:
+                print(f"Epoch [{epoch+1}/{N_epochs}], Loss: {loss.item():.4f}")
 
 # TO DO: optimal dimensions (number of layers and nodes) for both cases
 # what is the optimal number of collocation and boundary points?
