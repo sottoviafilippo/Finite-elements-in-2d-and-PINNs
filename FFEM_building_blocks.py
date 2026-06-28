@@ -317,7 +317,7 @@ class Mesh:
         return solu.reshape((self.Nx, self.Ny)).transpose()
 
     def compute_time_derivative_heat_equation(self, u: np.ndarray, alpha = 1):
-        """ Computes the time derivative accordine to the weak form of the heat equation"""
+        """ Computes the time derivative according to the weak form of the heat equation"""
 
         rhs = -alpha * self.S.dot(u)
         solu = spsolve(self.M.tocsr(), rhs)
