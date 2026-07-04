@@ -13,7 +13,7 @@ import random
 class PINN_Poisson_2d:
     """Simpler case: solve the Poisson equation in 2d with given Dirichlet boundary conditions"""
 
-    def __init__(self, N_internal_nodes: int, f_poisson: Callable, f_dirichlet: Callable):
+    def __init__(self, N_internal_nodes: int, f_poisson: Callable, f_dirichlet: Callable, x_bounds: tuple, y_bounds: tuple):
         """
         Poisson equation: d_xx u + d_yy u = -f_poisson. Dirichlet b.c.: u(bdy) = f_dirichlet
         """
@@ -21,6 +21,9 @@ class PINN_Poisson_2d:
         self.N_internal_nodes = N_internal_nodes
         self.f_dirichlet = f_dirichlet
         self.f_poisson = f_poisson
+
+        self.x_bounds = x_bounds
+        self.y_bounds = y_bounds
 
         # Why Tanh? for instance ReLU would not work since its second derivatives vanish (and the Poisson equation is built on them)
         self.model = nn.Sequential(
@@ -52,13 +55,13 @@ class PINN_Poisson_2d:
 
         pass 
 
-    def compute_boundary_values(self, N_boundary_points: int, x_bounds: tuple, y_bounds: tuple):
+    def compute_boundary_values(self, N_boundary_points: int):
         """Computes the boundary data used later in the optimization process, in order to impose the Dirichlet b.c. 
         Same number of points on every segment
         """
 
-        x_min, x_max = x_bounds
-        y_min, y_max = y_bounds
+        x_min, x_max = self.x_bounds
+        y_min, y_max = self.y_bounds
         # maybe one should also add cornerns for strict boundary enforcement?
         N_points_horizontal = int(np.abs((x_max - x_min)/(x_max - x_min + y_max - y_min))*N_boundary_points/2)
         N_points_vertical   = int(N_boundary_points/2) - N_points_horizontal
