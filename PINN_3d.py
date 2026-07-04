@@ -37,14 +37,14 @@ class PINN_Poisson_2d:
 
         pass
 
-    def set_collocation_points(self, N_collocation_points: int, x_bounds: tuple, y_bounds: tuple):
+    def set_collocation_points(self, N_collocation_points: int):
         """Sets the collocation points to be later used in the optimization procedure"""
 
         sampler = qmc.LatinHypercube(d = 2) # 2d model, 2 dimensions
         standard_samples = sampler.random(n = N_collocation_points)
 
-        x_min, x_max = x_bounds
-        y_min, y_max = y_bounds
+        x_min, x_max = self.x_bounds
+        y_min, y_max = self.y_bounds
         lower_bounds = [x_min, y_min]
         upper_bounds = [x_max, y_max]
 
@@ -252,17 +252,17 @@ class PINN_heat_2d:
 
     def train(self, N_epochs, weight_bdy = 10., weight_in = 10.):
 
-        self.physics_losses = []
+        self.physics_losses   = []
         self.dirichlet_losses = []
-        self.initial_losees = []
-        self.epochs = []
+        self.initial_losees   = []
+        self.epochs           = []
 
         for epoch in range(N_epochs):
             self.epochs.append(epoch + 1)
             phys_loss = self.compute_physics_loss()
-            bdy_loss = self.compute_dirichlet_loss()
-            in_loss = self.compute_initial_loss()
-            loss = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
+            bdy_loss  = self.compute_dirichlet_loss()
+            in_loss   = self.compute_initial_loss()
+            loss      = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
 
             self.optimizer.zero_grad() 
             loss.backward() 
@@ -281,11 +281,12 @@ class PINN_heat_2d:
         # Used by train_RARG to rank candidate points by how badly they violate the PDE.
         
         u = self.model(points)
-        grad_u = torch.autograd.grad(outputs=u, inputs=points, grad_outputs=torch.ones_like(u), create_graph=False, retain_graph=False)[0]
+        grad_u = torch.autograd.grad(outputs=u, inputs=points, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True)[0]
         u_x = grad_u[:, 0:1]
         u_y = grad_u[:, 1:2]
         u_t = grad_u[:, 2:3]
-        u_xx = torch.autograd.grad(outputs=u_x, inputs=points, grad_outputs=torch.ones_like(u_x),create_graph=False, retain_graph=False)[0][:, 0:1]
+        u_xx = torch.autograd.grad(outputs=u_x, inputs=points, grad_outputs=torch.ones_like(u_x),create_graph=False, retain_graph=True)[0][:, 0:1]
+        # only retain_graph on u_x since the graph feeding is shared (they both come from grad_u)
         u_yy = torch.autograd.grad(outputs=u_y, inputs=points, grad_outputs=torch.ones_like(u_y),create_graph=False, retain_graph=False)[0][:, 1:2]
         residual = (self.alpha * (u_xx + u_yy) - u_t) ** 2  # shape (N, 1), per-point squared residual
 
@@ -297,10 +298,10 @@ class PINN_heat_2d:
         # m: number of points to be added at every iteration (out of N_new_points sampled)
         # N_epochs_every_collocation_set: number of iterations to be performed with every number of collocation points
 
-        self.physics_losses = []
+        self.physics_losses   = []
         self.dirichlet_losses = []
-        self.initial_losees = []
-        N_epochs = 0
+        self.initial_losees   = []
+        N_epochs              = 0
 
         sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
 
@@ -308,9 +309,9 @@ class PINN_heat_2d:
         for epoch in range(N_epochs_every_collocation_set):
             N_epochs +=1
             phys_loss = self.compute_physics_loss()
-            bdy_loss = self.compute_dirichlet_loss()
-            in_loss = self.compute_initial_loss()
-            loss = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
+            bdy_loss  = self.compute_dirichlet_loss()
+            in_loss   = self.compute_initial_loss()
+            loss      = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
 
             self.optimizer.zero_grad() 
             loss.backward() 
@@ -335,19 +336,33 @@ class PINN_heat_2d:
 
             # only keep the m new collocation points with the largest residuals ("greedy" selection)
             m_eff = min(m, N_new_points)
-            topk_values, topk_indices = torch.topk(residuals_candidate_points, m_eff)
+            _, topk_indices = torch.topk(residuals_candidate_points, m_eff)
             new_points = candidate_points[topk_indices].detach()
 
             # merge with the existing collocation points, making sure grads are tracked again
-            self.collocation_points = torch.cat(
-                [self.collocation_points.detach(), new_points], dim=0
-            ).requires_grad_(True)
+            self.collocation_points = torch.cat([self.collocation_points.detach(), new_points], dim=0).requires_grad_(True)
 
-            # don't overshoot max_points too badly: trim if needed (optional safety net)
-            if len(self.collocation_points) > max_points:
-                self.collocation_points = self.collocation_points[:max_points].detach().requires_grad_(True)
-        
-            # only keep the m new collocation points with the greatest residuals
+            # now train
+
+            for epoch in range(N_epochs_every_collocation_set):
+                N_epochs += 1
+                phys_loss = self.compute_physics_loss()
+                bdy_loss  = self.compute_dirichlet_loss()
+                in_loss   = self.compute_initial_loss()
+                loss      = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                self.physics_losses.append(phys_loss.item())
+                self.dirichlet_losses.append(bdy_loss.item())
+                self.initial_losees.append(in_loss.item())
+
+                if N_epochs % 1000 == 0:
+                    print(f"Epoch [{N_epochs}/{max_epochs}], N_collocation_points: {len(self.collocation_points)}, Loss: {loss.item():.4f}")
+
+                if N_epochs > max_epochs:
+                    break
 
 
 # TO DO: optimal dimensions (number of layers and nodes) for both cases
