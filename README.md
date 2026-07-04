@@ -4,7 +4,8 @@ The Mesh class creates a 2d finite element structured mesh, with linear function
 
 The main limitation is that in order to generate a mesh one has to give a set of nodes in x-direction and a set of nodes in y-direction. It will not be possible, for example, to have a finer mesh in x-direction only in a given y range. This choice was taken for simplicity's sake. Future versions of this code might work with less uniform meshes.
 
-The PINNs are built with PyTorch. Work in progress.
+The PINNs are built with PyTorch. The file PINN-3d.py contains the definition of two PINN classes: one for solving a 2d Poisson problem (PINN_Poisson_2d) and one for a 2+1 d heat equation, called PINN_heat_2d (evolution in time of a 2d temperature field). I use these classes in order to test them in the notebook pinn_trials.ipynb, where I also compare their outputs to the results obtained with the finite element algorithm.
+I am currently testing various methods for choosing the collocation points and training the heat PINN, so far I have used LHS and RAR-G (see for instance https://arxiv.org/pdf/2207.10289). RAD is in the works. More details in the notebook.
 
 # A quick overview of the maths : building the mass and stiffness matrices.
 
