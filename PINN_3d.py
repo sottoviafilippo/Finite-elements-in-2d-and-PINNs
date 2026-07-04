@@ -124,7 +124,7 @@ class PINN_Poisson_2d:
 class PINN_heat_2d:
     """Solve the heat equation in 2 spatial dimensions + time"""
 
-    def __init__(self, N_internal_nodes: int, f_initial: Callable, f_dirichlet: Callable, alpha: float = 1):
+    def __init__(self, N_internal_nodes: int, f_initial: Callable, f_dirichlet: Callable, x_bounds: tuple, y_bounds: tuple, t_bounds: tuple, alpha: float = 1):
         """
         Heat equation: alpha(d_xx u + d_yy u) = d_t u. Dirichlet b.c.: u(boundary) = f(boundary) at all times. Initial b.c.: u(t=0) = f_initial
         """
@@ -134,6 +134,10 @@ class PINN_heat_2d:
         self.f_dirichlet = f_dirichlet
         self.f_initial = f_initial
         self.alpha = alpha
+
+        self.x_bounds = x_bounds
+        self.y_bounds = y_bounds
+        self.t_bounds = t_bounds
          
         # input order: x, y, t
         self.model = nn.Sequential(
@@ -153,15 +157,15 @@ class PINN_heat_2d:
         pass
 
 
-    def set_collocation_points(self, N_collocation_points: int, x_bounds: tuple, y_bounds: tuple, t_bounds: tuple):
+    def set_collocation_points(self, N_collocation_points: int):
         """Sets the collocation points to be later used in the optimization procedure"""
 
         sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
         standard_samples = sampler.random(n = N_collocation_points)
 
-        x_min, x_max = x_bounds
-        y_min, y_max = y_bounds
-        t_min, t_max = t_bounds
+        x_min, x_max = self.x_bounds
+        y_min, y_max = self.y_bounds
+        t_min, t_max = self.t_bounds
         lower_bounds = [x_min, y_min, t_min]
         upper_bounds = [x_max, y_max, t_max]
 
@@ -170,14 +174,14 @@ class PINN_heat_2d:
         pass 
 
 
-    def compute_boundary_values(self, N_boundary_points: int, x_bounds: tuple, y_bounds: tuple, t_bounds: tuple):
+    def compute_boundary_values(self, N_boundary_points: int):
         """Computes the boundary data used later in the optimization process, in order to impose the Dirichlet b.c. 
         Same number of points on every segment
         """
 
-        x_min, x_max = x_bounds
-        y_min, y_max = y_bounds
-        t_min, t_max = t_bounds
+        x_min, x_max = self.x_bounds
+        y_min, y_max = self.y_bounds
+        t_min, t_max = self.t_bounds
         
         # number of points on each side proportional to the side lengths. May pose some problems if one side is much shorter
         N_points_horizontal = int(np.abs((x_max - x_min)/(x_max - x_min + y_max - y_min))*N_boundary_points/2)
@@ -190,15 +194,15 @@ class PINN_heat_2d:
         pass
 
 
-    def compute_initial_values(self, N_initial_points: int, x_bounds: tuple, y_bounds: tuple, t_min: float):
+    def compute_initial_values(self, N_initial_points: int, t_min: float):
         """Initial conditions at t=t_min (typically t=0)
         """
 
         sampler = qmc.LatinHypercube(d=2)  # 2+1d model, 2 spatial dimensions
         standard_samples = sampler.random(n=N_initial_points)
 
-        x_min, x_max = x_bounds
-        y_min, y_max = y_bounds
+        x_min, x_max = self.x_bounds
+        y_min, y_max = self.y_bounds
         lower_bounds = [x_min, y_min]
         upper_bounds = [x_max, y_max]
 
@@ -269,6 +273,82 @@ class PINN_heat_2d:
 
             if (epoch + 1) % 1000 == 0:
                 print(f"Epoch [{epoch+1}/{N_epochs}], Loss: {loss.item():.4f}")
+
+
+    def _compute_residuals_at_points(self, points: torch.Tensor):
+        # Computes the pointwise squared PDE residual at the given points.
+        # points: leaf tensor with requires_grad=True.
+        # Used by train_RARG to rank candidate points by how badly they violate the PDE.
+        
+        u = self.model(points)
+        grad_u = torch.autograd.grad(outputs=u, inputs=points, grad_outputs=torch.ones_like(u), create_graph=False, retain_graph=False)[0]
+        u_x = grad_u[:, 0:1]
+        u_y = grad_u[:, 1:2]
+        u_t = grad_u[:, 2:3]
+        u_xx = torch.autograd.grad(outputs=u_x, inputs=points, grad_outputs=torch.ones_like(u_x),create_graph=False, retain_graph=False)[0][:, 0:1]
+        u_yy = torch.autograd.grad(outputs=u_y, inputs=points, grad_outputs=torch.ones_like(u_y),create_graph=False, retain_graph=False)[0][:, 1:2]
+        residual = (self.alpha * (u_xx + u_yy) - u_t) ** 2  # shape (N, 1), per-point squared residual
+
+        return residual.detach()
+
+    
+    def train_RARG(self, N_new_points = 500, m = 50, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
+        # residual-based adaptive finement with greed. Following https://arxiv.org/pdf/2207.10289
+        # m: number of points to be added at every iteration (out of N_new_points sampled)
+        # N_epochs_every_collocation_set: number of iterations to be performed with every number of collocation points
+
+        self.physics_losses = []
+        self.dirichlet_losses = []
+        self.initial_losees = []
+        N_epochs = 0
+
+        sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
+
+        # first train on the LHS-sample collocation points
+        for epoch in range(N_epochs_every_collocation_set):
+            N_epochs +=1
+            phys_loss = self.compute_physics_loss()
+            bdy_loss = self.compute_dirichlet_loss()
+            in_loss = self.compute_initial_loss()
+            loss = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
+
+            self.optimizer.zero_grad() 
+            loss.backward() 
+            self.optimizer.step() 
+
+            self.physics_losses.append(phys_loss.item())
+            self.dirichlet_losses.append(bdy_loss.item())
+
+        while N_epochs <= max_epochs and len(self.collocation_points) <= max_points:
+            # first, sample N_new_points new collocation points
+            standard_samples = sampler.random(n = N_new_points)
+            x_min, x_max = self.x_bounds
+            y_min, y_max = self.y_bounds
+            t_min, t_max = self.t_bounds
+            lower_bounds = [x_min, y_min, t_min]
+            upper_bounds = [x_max, y_max, t_max]
+            
+            candidate_points = torch.tensor(qmc.scale(standard_samples, lower_bounds, upper_bounds),dtype=torch.float32, requires_grad=True)
+
+            # evaluate the PDE residual at each candidate point
+            residuals_candidate_points = self._compute_residuals_at_points(candidate_points).squeeze(-1)  # shape (N_new_points,)
+
+            # only keep the m new collocation points with the largest residuals ("greedy" selection)
+            m_eff = min(m, N_new_points)
+            topk_values, topk_indices = torch.topk(residuals_candidate_points, m_eff)
+            new_points = candidate_points[topk_indices].detach()
+
+            # merge with the existing collocation points, making sure grads are tracked again
+            self.collocation_points = torch.cat(
+                [self.collocation_points.detach(), new_points], dim=0
+            ).requires_grad_(True)
+
+            # don't overshoot max_points too badly: trim if needed (optional safety net)
+            if len(self.collocation_points) > max_points:
+                self.collocation_points = self.collocation_points[:max_points].detach().requires_grad_(True)
+        
+            # only keep the m new collocation points with the greatest residuals
+
 
 # TO DO: optimal dimensions (number of layers and nodes) for both cases
 # what is the optimal number of collocation and boundary points?
