@@ -51,6 +51,9 @@ For the moment we can simulate the Poisson equation with Dirichlet boundary cond
 - The solution is given as a 2d array, ready for plotting (for example as a colormap).
 
 # How to use this code - Heat equation
-
 SECTION TO BE COMPLETED
-Note that for stability we need a good number of timesteps. The requirement seems to be well above the one posed by the CFL condition.
+
+
+Note that, with explicit methods, for stability we need a high number of timesteps. The requirement seems to be well above the one posed by the CFL condition.
+
+That is why in the notebook testing PINNs I use the implicit middle-point rule, which proves to be much more cost effective.
