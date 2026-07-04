@@ -1,4 +1,4 @@
-# A 2d demonstration of the finite element method. And a demonstration of PINNs, applied to the heat equations
+# A 2d demonstration of the finite element method. And a demonstration of PINNs, applied to the heat equation
 
 The Mesh class creates a 2d finite element structured mesh, with linear functions. 
 
