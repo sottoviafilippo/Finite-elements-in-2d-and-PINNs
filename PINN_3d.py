@@ -395,7 +395,8 @@ class PINN_heat_2d:
         p = (p_tilde / p_tilde.sum()).detach()  # proper probability mass function. detach() : cut off from the autograd structure to avoid problems and keep code lighter
 
         idx = torch.multinomial(p, num_samples=N_selected, replacement=True) #indices at which the points are takens
-        sampled_points = dense_points[idx]
+        sampled_points = dense_points[idx].detach() 
+        # detach() needed, otherwise it reference back to dense_point which makes torch go through the points a second time and gives error
 
         return sampled_points
 
