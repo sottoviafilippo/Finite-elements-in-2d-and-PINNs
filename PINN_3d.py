@@ -120,6 +120,8 @@ class PINN_Poisson_2d:
             if (epoch + 1) % 1000 == 0:
                 print(f"Epoch [{epoch+1}/{N_epochs}], Loss: {loss.item():.4f}")
 
+        pass
+
 
 
 
@@ -217,6 +219,8 @@ class PINN_heat_2d:
         self.initial_values = torch.tensor([self.f_initial(p) for p in scaled_samples_with_t], dtype=torch.float32).reshape(-1, 1)
         self.initial_points = torch.tensor(scaled_samples_with_t, dtype=torch.float32, requires_grad=True)
 
+        pass
+
 
     def compute_physics_loss(self):
         """Computes the physics loss based on the heat equation alpha(d_xx u + d_yy u) - d_t u = 0"""
@@ -277,8 +281,9 @@ class PINN_heat_2d:
             if (epoch + 1) % 1000 == 0:
                 print(f"Epoch [{epoch+1}/{N_epochs}], Loss: {loss.item():.4f}")
 
+        pass
 
-    def _compute_residuals_at_points(self, points: torch.Tensor):
+    def compute_residuals_at_points(self, points: torch.Tensor):
         # Computes the pointwise squared PDE residual at the given points.
         # points: leaf tensor with requires_grad=True.
         # Used by train_RARG to rank candidate points by how badly they violate the PDE.
@@ -296,7 +301,7 @@ class PINN_heat_2d:
         return residual.detach()
 
     
-    def train_RARG(self, N_new_points = 500, m = 50, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
+    def train_RARG(self, N_new_points = 500, m = 50,  max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
         # residual-based adaptive finement with greed. Following https://arxiv.org/pdf/2207.10289
         # m: number of points to be added at every iteration (out of N_new_points sampled)
         # N_epochs_every_collocation_set: number of iterations to be performed with every number of collocation points
@@ -335,7 +340,7 @@ class PINN_heat_2d:
             candidate_points = torch.tensor(qmc.scale(standard_samples, lower_bounds, upper_bounds),dtype=torch.float32, requires_grad=True)
 
             # evaluate the PDE residual at each candidate point
-            residuals_candidate_points = self._compute_residuals_at_points(candidate_points).squeeze(-1)  # shape (N_new_points,)
+            residuals_candidate_points = self.compute_residuals_at_points(candidate_points).squeeze(-1)  # shape (N_new_points,)
 
             # only keep the m new collocation points with the largest residuals ("greedy" selection)
             m_eff = min(m, N_new_points)
@@ -367,7 +372,60 @@ class PINN_heat_2d:
                 if N_epochs > max_epochs:
                     break
 
+        pass
 
-# TO DO: optimal dimensions (number of layers and nodes) for both cases
-# what is the optimal number of collocation and boundary points?
-# what weight should be given to the boundary loss?  
+
+    def sample_points_for_RAD(self, S0_size = 1000, k = 1, c = 1):
+        # sample new points for the RAD training following the steps outlines in https://arxiv.org/pdf/2207.10289, page 8
+
+        sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
+        standard_samples = sampler.random(n = N_collocation_points)
+
+        x_min, x_max = self.x_bounds
+        y_min, y_max = self.y_bounds
+        t_min, t_max = self.t_bounds
+        lower_bounds = [x_min, y_min, t_min]
+        upper_bounds = [x_max, y_max, t_max]
+
+        dense_points = torch.tensor(qmc.scale(standard_samples, lower_bounds, upper_bounds), dtype=torch.float32, requires_grad=True)
+        residuals_on_dense_set_power_k = self.compute_residuals_at_points(dense_points) ** k 
+        E_eps_k = residuals_on_dense_set_power_k.sum().item() # rough way of estimating the normalization factor
+        p_tilde = residuals_on_dense_set_power_k/E_eps_k + c
+        p = p_tilde/p_tilde.sum().item() # normalize
+
+
+        sampling_probs = torch.clamp(p_tilde.squeeze(), min=0.0, max=1.0) # even if it is normalize, ensure once again that p_tilde is between 0 and 1
+        mask = torch.bernoulli(sampling_probs).bool() # this returns a tensor of 1s (keep) and 0s (discard) of the same shape
+        sampled_points = dense_points[mask]
+
+        return sampled_points
+
+    def train_RAD(self, N_new_points = 500, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
+        """
+        Training with residual-based adaptive distribution. 
+        """
+
+        self.physics_losses   = []
+        self.dirichlet_losses = []
+        self.initial_losees   = []
+        N_epochs              = 0
+
+        sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
+
+        # first train on the LHS-sample collocation points
+        for epoch in range(N_epochs_every_collocation_set):
+            N_epochs +=1
+            phys_loss = self.compute_physics_loss()
+            bdy_loss  = self.compute_dirichlet_loss()
+            in_loss   = self.compute_initial_loss()
+            loss      = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
+
+            self.optimizer.zero_grad() 
+            loss.backward() 
+            self.optimizer.step() 
+
+            self.physics_losses.append(phys_loss.item())
+            self.dirichlet_losses.append(bdy_loss.item())
+
+        
+        pass
