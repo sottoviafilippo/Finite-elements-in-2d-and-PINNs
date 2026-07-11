@@ -375,11 +375,11 @@ class PINN_heat_2d:
         pass
 
 
-    def sample_points_for_RAD(self, S0_size = 1000, k = 1, c = 1):
-        # sample new points for the RAD training following the steps outlines in https://arxiv.org/pdf/2207.10289, page 8
+    def sample_points_for_RAD(self, N_selected = 100, S0_size = 1000, k = 1, c = 1):
+        # sample N_selected new points for the RAD training following the steps outlines in https://arxiv.org/pdf/2207.10289, page 8
 
         sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
-        standard_samples = sampler.random(n = N_collocation_points)
+        standard_samples = sampler.random(n = S0_size)
 
         x_min, x_max = self.x_bounds
         y_min, y_max = self.y_bounds
@@ -387,20 +387,19 @@ class PINN_heat_2d:
         lower_bounds = [x_min, y_min, t_min]
         upper_bounds = [x_max, y_max, t_max]
 
-        dense_points = torch.tensor(qmc.scale(standard_samples, lower_bounds, upper_bounds), dtype=torch.float32, requires_grad=True)
-        residuals_on_dense_set_power_k = self.compute_residuals_at_points(dense_points) ** k 
-        E_eps_k = residuals_on_dense_set_power_k.sum().item() # rough way of estimating the normalization factor
-        p_tilde = residuals_on_dense_set_power_k/E_eps_k + c
-        p = p_tilde/p_tilde.sum().item() # normalize
+        dense_points = torch.tensor(qmc.scale(standard_samples, lower_bounds, upper_bounds),dtype=torch.float32, requires_grad=True)
+        residuals = self.compute_residuals_at_points(dense_points).abs() ** k
+        residuals = residuals.squeeze() # removes dimension of size 1
+        E_eps_k = residuals.mean().item()      # rough estimation of the expectation value, over the S0 set
+        p_tilde = residuals / E_eps_k + c
+        p = (p_tilde / p_tilde.sum()).detach()  # proper probability mass function. detach() : cut off from the autograd structure to avoid problems and keep code lighter
 
-
-        sampling_probs = torch.clamp(p_tilde.squeeze(), min=0.0, max=1.0) # even if it is normalize, ensure once again that p_tilde is between 0 and 1
-        mask = torch.bernoulli(sampling_probs).bool() # this returns a tensor of 1s (keep) and 0s (discard) of the same shape
-        sampled_points = dense_points[mask]
+        idx = torch.multinomial(p, num_samples=N_selected, replacement=True) #indices at which the points are takens
+        sampled_points = dense_points[idx]
 
         return sampled_points
 
-    def train_RAD(self, N_new_points = 500, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
+    def train_RAD(self, N_selected = 100, S0_size = 1000, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
         """
         Training with residual-based adaptive distribution. 
         """
@@ -427,5 +426,31 @@ class PINN_heat_2d:
             self.physics_losses.append(phys_loss.item())
             self.dirichlet_losses.append(bdy_loss.item())
 
-        
+        while N_epochs <= max_epochs and len(self.collocation_points) <= max_points:
+            
+            new_points = self.sample_points_for_RAD(N_selected=N_selected, S0_size = S0_size, k=k, c=c)
+
+            # merge with the existing collocation points, making sure grads are tracked again
+            self.collocation_points = torch.cat([self.collocation_points.detach(), new_points], dim=0).requires_grad_(True)
+
+            # now train
+            for epoch in range(N_epochs_every_collocation_set):
+                N_epochs += 1
+                phys_loss = self.compute_physics_loss()
+                bdy_loss  = self.compute_dirichlet_loss()
+                in_loss   = self.compute_initial_loss()
+                loss      = phys_loss + weight_bdy * bdy_loss + weight_in * in_loss
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                self.physics_losses.append(phys_loss.item())
+                self.dirichlet_losses.append(bdy_loss.item())
+                self.initial_losees.append(in_loss.item())
+
+                if N_epochs % 1000 == 0:
+                    print(f"Epoch [{N_epochs}/{max_epochs}], N_collocation_points: {len(self.collocation_points)}, Loss: {loss.item():.4f}")
+
+                if N_epochs > max_epochs:
+                    break
         pass
