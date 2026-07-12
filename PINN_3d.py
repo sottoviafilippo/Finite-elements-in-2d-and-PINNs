@@ -526,8 +526,8 @@ class PINN_heat_2d_circle:
         t_min, t_max = self.t_bounds
         t = standard_samples[:, 1] * (t_max - t_min) + t_min
         # now back to cartesian coordinates
-        x = self.radius * np.cos(theta)
-        y = self.radius * np.sin(theta)
+        x = self.R * np.cos(theta)
+        y = self.R * np.sin(theta)
 
         self.boundary_points = np.stack([x, y, t], axis=1).tolist()
         self.boundary_values = torch.tensor([self.f_dirichlet(p) for p in self.boundary_points], dtype=torch.float32).reshape(-1, 1)
@@ -549,10 +549,13 @@ class PINN_heat_2d_circle:
         # now go back to Cartesian coordinated
         x = r * np.cos(theta)
         y = r * np.sin(theta)
+        t_mins = t_min * np.ones_like(x)
 
-        numpy_samples = np.stack([x, y, t_min], axis=1)
+        numpy_samples = np.stack([x, y, t_mins], axis=1)
+        initial_value_samples = [self.f_initial(xx) for xx in numpy_samples]
 
-        self.initial_values = torch.tensor(numpy_samples, dtype=torch.float32, requires_grad=True)
+        self.initial_values = torch.tensor(initial_value_samples, dtype=torch.float32, requires_grad=True)
+        self.initial_points = torch.tensor(numpy_samples, dtype=torch.float32, requires_grad=True)
 
         pass
 
@@ -612,18 +615,22 @@ class PINN_heat_2d_circle:
 
 
     def sample_points_for_RAD(self, N_selected = 100, S0_size = 1000, k = 1, c = 1):
-        # sample N_selected new points for the RAD training following the steps outlines in https://arxiv.org/pdf/2207.10289, page 8
+        # sample N_selected new points out of a sample of size S0_size for the RAD training following the steps outlines in https://arxiv.org/pdf/2207.10289, page 8
 
-        sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
+
+        sampler = qmc.LatinHypercube(d = 3) # s2+1d model, 3 dimensions
         standard_samples = sampler.random(n = S0_size)
 
-        x_min, x_max = self.x_bounds
-        y_min, y_max = self.y_bounds
+        # first: polar coordinates
+        r = self.R * np.sqrt(standard_samples[:, 0]) # take sqrt() because I want r^2 to follow a uniform distribution (area-uniform sampling)
+        theta = 2. * np.pi * standard_samples[:, 1]
         t_min, t_max = self.t_bounds
-        lower_bounds = [x_min, y_min, t_min]
-        upper_bounds = [x_max, y_max, t_max]
-
-        dense_points = torch.tensor(qmc.scale(standard_samples, lower_bounds, upper_bounds),dtype=torch.float32, requires_grad=True)
+        t = standard_samples[:, 2] * (t_max - t_min) + t_min
+        # now go back to Cartesian coordinated
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+        numpy_samples = np.stack([x, y, t], axis=1)
+        dense_points = torch.tensor(numpy_samples, dtype=torch.float32, requires_grad=True)
         residuals = self.compute_residuals_at_points(dense_points).abs() ** k
         residuals = residuals.squeeze() # removes dimension of size 1
         E_eps_k = residuals.mean().item()      # rough estimation of the expectation value, over the S0 set
@@ -632,9 +639,9 @@ class PINN_heat_2d_circle:
 
         idx = torch.multinomial(p, num_samples=N_selected, replacement=True) #indices at which the points are takens
         sampled_points = dense_points[idx].detach() 
-        # detach() needed, otherwise it reference back to dense_point which makes torch go through the points a second time and gives error
 
         return sampled_points
+    
 
     def train_RAD(self, N_selected = 100, S0_size = 1000, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
         """
