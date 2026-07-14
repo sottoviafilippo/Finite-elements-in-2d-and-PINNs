@@ -735,6 +735,25 @@ class PINN_heat_2d_circle_reparemetrised:
 
         pass
 
+    def compute_A(self, points):
+        x, y, t = points[:, 0:1], points[:, 1:2], points[:, 2:3]
+
+        f_init = torch.tensor([self.f_initial([xx.item(), yy.item(), 0.0]) for xx, yy in zip(x, y)], dtype=torch.float32).reshape(-1, 1)
+        # reuse f_dirichlet's boundary value as if constant in the interior (needs to be adapted if f_dirichlet depends on t)
+        f_bdy_extended = torch.tensor([self.f_dirichlet([xx.item(), yy.item(), tt.item()]) for xx, yy, tt in zip(x, y, t)], dtype=torch.float32).reshape(-1, 1)
+
+        return f_init * torch.exp(-t/self.tau) + f_bdy_extended * (1 - torch.exp(-t/self.tau))
+
+
+    def forward(self, points):
+        x = points[:, 0:1]
+        y = points[:, 1:2]
+        D = self.R**2 - x**2 - y**2  # 0 on the boudnary, as wished
+        t = points[:, 2:3]
+        A = self.compute_A(points)
+        
+        return A + D * t * self.model(points) # the full solution, following the parametrisation
+
 
     def set_collocation_points(self, N_collocation_points: int):
         """Sets the collocation points to be later used in the optimization procedure"""
@@ -762,7 +781,7 @@ class PINN_heat_2d_circle_reparemetrised:
     def compute_physics_loss(self):
         """Computes the physics loss based on the heat equation alpha(d_xx u + d_yy u) - d_t u = 0"""
 
-        u = self.model(self.collocation_points)
+        u = self.forward(self.collocation_points)
 
         # first compute the first derivatives
         grad_u = torch.autograd.grad(outputs=u, inputs=self.collocation_points, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True)[0]
@@ -775,23 +794,6 @@ class PINN_heat_2d_circle_reparemetrised:
         u_yy = torch.autograd.grad(outputs=u_y, inputs=self.collocation_points, grad_outputs=torch.ones_like(u_y),create_graph=True, retain_graph=True)[0][:, 1:2]
 
         return torch.mean((self.alpha * (u_xx + u_yy) - u_t) ** 2) # beware of sign
-
-
-    def compute_dirichlet_loss(self):
-
-        criterion = nn.MSELoss()
-        predictions = self.model(self.boundary_points)
-
-        return criterion(predictions, self.boundary_values)
-    
-
-    def compute_initial_loss(self):
-        """loss corresponding to the initial conditions at t = t_min"""
-
-        criterion = nn.MSELoss()
-        predictions = self.model(self.initial_points)
-
-        return criterion(predictions, self.initial_values)
 
 
     def compute_residuals_at_points(self, points: torch.Tensor):
@@ -810,7 +812,6 @@ class PINN_heat_2d_circle_reparemetrised:
         residual = (self.alpha * (u_xx + u_yy) - u_t) ** 2  # shape (N, 1), per-point squared residual
 
         return residual.detach()
-
 
 
     def sample_points_for_RAD(self, N_selected = 100, S0_size = 1000, k = 1, c = 1):
