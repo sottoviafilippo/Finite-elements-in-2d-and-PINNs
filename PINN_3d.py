@@ -698,7 +698,7 @@ class PINN_heat_2d_circle:
         pass
 
 
-class PINN_heat_2d_circle_reparemetrised:
+class PINN_heat_2d_circle_reparametrised:
     """Solve the heat equation in 2 spatial dimensions + time, on a cirle of radius R centered in the origin
     For the description of the reparametrisation, see the notebook bottle_in_fridge.ipynb"""
 
@@ -843,7 +843,7 @@ class PINN_heat_2d_circle_reparemetrised:
         return sampled_points
     
 
-    def train_RAD(self, N_selected = 100, S0_size = 1000, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
+    def train_RAD(self, N_selected = 100, S0_size = 1000, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250):
         """
         Training with residual-based adaptive distribution. 
         """
