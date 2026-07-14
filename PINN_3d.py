@@ -554,7 +554,7 @@ class PINN_heat_2d_circle:
         numpy_samples = np.stack([x, y, t_mins], axis=1)
         initial_value_samples = [self.f_initial(xx) for xx in numpy_samples]
 
-        self.initial_values = torch.tensor(initial_value_samples, dtype=torch.float32, requires_grad=True)
+        self.initial_values = torch.tensor(initial_value_samples, dtype=torch.float32).reshape(-1, 1)
         self.initial_points = torch.tensor(numpy_samples, dtype=torch.float32, requires_grad=True)
 
         pass
@@ -689,6 +689,197 @@ class PINN_heat_2d_circle:
                 self.physics_losses.append(phys_loss.item())
                 self.dirichlet_losses.append(bdy_loss.item())
                 self.initial_losees.append(in_loss.item())
+
+                if N_epochs % 1000 == 0:
+                    print(f"Epoch [{N_epochs}/{max_epochs}], N_collocation_points: {len(self.collocation_points)}, Loss: {loss.item():.4f}")
+
+                if N_epochs > max_epochs:
+                    break
+        pass
+
+
+class PINN_heat_2d_circle_reparemetrised:
+    """Solve the heat equation in 2 spatial dimensions + time, on a cirle of radius R centered in the origin
+    For the description of the reparametrisation, see the notebook bottle_in_fridge.ipynb"""
+
+    def __init__(self, N_internal_nodes: int, f_initial: Callable, f_dirichlet: Callable, R: float, t_bounds: tuple, tau: float, alpha: float = 1):
+        """
+        Heat equation: alpha(d_xx u + d_yy u) = d_t u. Dirichlet b.c.: u(boundary) = f(boundary) at all times. Initial b.c.: u(t=0) = f_initial
+        R is the radius of the circle on which we want to solve the heat equation
+        """
+        # first version: 4 internal layers, hardcoded for the sake of simplicity
+        # Larger network than for the 2d Poisson equation.
+        self.N_internal_nodes = N_internal_nodes
+        self.f_dirichlet = f_dirichlet
+        self.f_initial = f_initial
+        self.alpha = alpha
+
+        self.R = R
+        self.t_bounds = t_bounds
+        self.tau = tau
+         
+        # input order: x, y, t
+        self.model = nn.Sequential(
+            nn.Linear(3, N_internal_nodes),  
+            nn.Tanh(),         
+            nn.Linear(N_internal_nodes, N_internal_nodes),  
+            nn.Tanh(),
+            nn.Linear(N_internal_nodes, N_internal_nodes),
+            nn.Tanh(),
+            nn.Linear(N_internal_nodes, N_internal_nodes),  
+            nn.Tanh(),
+            nn.Linear(N_internal_nodes, 1)
+        )
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
+
+        pass
+
+
+    def set_collocation_points(self, N_collocation_points: int):
+        """Sets the collocation points to be later used in the optimization procedure"""
+        """Area uniform sampling"""
+
+        sampler = qmc.LatinHypercube(d = 3) # 2+1d model, 3 dimensions
+        standard_samples = sampler.random(n = N_collocation_points)
+
+        # first: polar coordinates
+        r = self.R * np.sqrt(standard_samples[:, 0]) # take sqrt() because I want r^2 to follow a uniform distribution (area-uniform sampling)
+        theta = 2. * np.pi * standard_samples[:, 1]
+        t_min, t_max = self.t_bounds
+        t = standard_samples[:, 2] * (t_max - t_min) + t_min
+        # now go back to Cartesian coordinated
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+        
+        numpy_samples = np.stack([x, y, t], axis=1)
+
+        self.collocation_points = torch.tensor(numpy_samples, dtype=torch.float32, requires_grad=True)
+
+        pass 
+
+
+    def compute_physics_loss(self):
+        """Computes the physics loss based on the heat equation alpha(d_xx u + d_yy u) - d_t u = 0"""
+
+        u = self.model(self.collocation_points)
+
+        # first compute the first derivatives
+        grad_u = torch.autograd.grad(outputs=u, inputs=self.collocation_points, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True)[0]
+        u_x = grad_u[:, 0:1]
+        u_y = grad_u[:, 1:2]
+        u_t = grad_u[:, 2:3]
+
+        # now compute the second derivatives
+        u_xx = torch.autograd.grad(outputs=u_x, inputs=self.collocation_points, grad_outputs=torch.ones_like(u_x),create_graph=True, retain_graph=True)[0][:, 0:1]
+        u_yy = torch.autograd.grad(outputs=u_y, inputs=self.collocation_points, grad_outputs=torch.ones_like(u_y),create_graph=True, retain_graph=True)[0][:, 1:2]
+
+        return torch.mean((self.alpha * (u_xx + u_yy) - u_t) ** 2) # beware of sign
+
+
+    def compute_dirichlet_loss(self):
+
+        criterion = nn.MSELoss()
+        predictions = self.model(self.boundary_points)
+
+        return criterion(predictions, self.boundary_values)
+    
+
+    def compute_initial_loss(self):
+        """loss corresponding to the initial conditions at t = t_min"""
+
+        criterion = nn.MSELoss()
+        predictions = self.model(self.initial_points)
+
+        return criterion(predictions, self.initial_values)
+
+
+    def compute_residuals_at_points(self, points: torch.Tensor):
+        # Computes the pointwise squared PDE residual at the given points.
+        # points: leaf tensor with requires_grad=True.
+        # Used by train_RARG to rank candidate points by how badly they violate the PDE.
+        
+        u = self.model(points)
+        grad_u = torch.autograd.grad(outputs=u, inputs=points, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True)[0]
+        u_x = grad_u[:, 0:1]
+        u_y = grad_u[:, 1:2]
+        u_t = grad_u[:, 2:3]
+        u_xx = torch.autograd.grad(outputs=u_x, inputs=points, grad_outputs=torch.ones_like(u_x),create_graph=False, retain_graph=True)[0][:, 0:1]
+        # only retain_graph on u_x since the graph feeding is shared (they both come from grad_u)
+        u_yy = torch.autograd.grad(outputs=u_y, inputs=points, grad_outputs=torch.ones_like(u_y),create_graph=False, retain_graph=False)[0][:, 1:2]
+        residual = (self.alpha * (u_xx + u_yy) - u_t) ** 2  # shape (N, 1), per-point squared residual
+
+        return residual.detach()
+
+
+
+    def sample_points_for_RAD(self, N_selected = 100, S0_size = 1000, k = 1, c = 1):
+        # sample N_selected new points out of a sample of size S0_size for the RAD training following the steps outlines in https://arxiv.org/pdf/2207.10289, page 8
+
+
+        sampler = qmc.LatinHypercube(d = 3) # s2+1d model, 3 dimensions
+        standard_samples = sampler.random(n = S0_size)
+
+        # first: polar coordinates
+        r = self.R * np.sqrt(standard_samples[:, 0]) # take sqrt() because I want r^2 to follow a uniform distribution (area-uniform sampling)
+        theta = 2. * np.pi * standard_samples[:, 1]
+        t_min, t_max = self.t_bounds
+        t = standard_samples[:, 2] * (t_max - t_min) + t_min
+        # now go back to Cartesian coordinated
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+        numpy_samples = np.stack([x, y, t], axis=1)
+        dense_points = torch.tensor(numpy_samples, dtype=torch.float32, requires_grad=True)
+        residuals = self.compute_residuals_at_points(dense_points).abs() ** k
+        residuals = residuals.squeeze() # removes dimension of size 1
+        E_eps_k = residuals.mean().item()      # rough estimation of the expectation value, over the S0 set
+        p_tilde = residuals / E_eps_k + c
+        p = (p_tilde / p_tilde.sum()).detach()  # proper probability mass function. detach() : cut off from the autograd structure to avoid problems and keep code lighter
+
+        idx = torch.multinomial(p, num_samples=N_selected, replacement=True) #indices at which the points are takens
+        sampled_points = dense_points[idx].detach() 
+
+        return sampled_points
+    
+
+    def train_RAD(self, N_selected = 100, S0_size = 1000, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250,  weight_bdy = 10., weight_in = 10.):
+        """
+        Training with residual-based adaptive distribution. 
+        """
+
+        self.physics_losses   = []
+        N_epochs              = 0
+
+        # first train on the LHS-sample collocation points
+        for epoch in range(N_epochs_every_collocation_set):
+            N_epochs +=1
+            phys_loss = self.compute_physics_loss()
+            loss      = phys_loss 
+
+            self.optimizer.zero_grad() 
+            loss.backward() 
+            self.optimizer.step() 
+
+            self.physics_losses.append(phys_loss.item())
+    
+        while N_epochs <= max_epochs and len(self.collocation_points) <= max_points:
+            
+            new_points = self.sample_points_for_RAD(N_selected=N_selected, S0_size = S0_size, k=k, c=c)
+
+            # merge with the existing collocation points, making sure grads are tracked again
+            self.collocation_points = torch.cat([self.collocation_points.detach(), new_points], dim=0).requires_grad_(True)
+
+            # now train
+            for epoch in range(N_epochs_every_collocation_set):
+                N_epochs += 1
+                phys_loss = self.compute_physics_loss()
+                loss      = phys_loss 
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                self.physics_losses.append(phys_loss.item())
+
 
                 if N_epochs % 1000 == 0:
                     print(f"Epoch [{N_epochs}/{max_epochs}], N_collocation_points: {len(self.collocation_points)}, Loss: {loss.item():.4f}")
