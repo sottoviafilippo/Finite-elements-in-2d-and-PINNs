@@ -702,7 +702,7 @@ class PINN_heat_2d_circle_reparametrised:
     """Solve the heat equation in 2 spatial dimensions + time, on a cirle of radius R centered in the origin
     For the description of the reparametrisation, see the notebook bottle_in_fridge.ipynb"""
 
-    def __init__(self, N_internal_nodes: int, f_initial: Callable, f_dirichlet: Callable, R: float, t_bounds: tuple, tau: float, alpha: float = 1):
+    def __init__(self, N_internal_nodes: int, f_initial: Callable, f_dirichlet: Callable, t_bounds: tuple, tau: float, alpha: float = 1):
         """
         Heat equation: alpha(d_xx u + d_yy u) = d_t u. Dirichlet b.c.: u(boundary) = f(boundary) at all times. Initial b.c.: u(t=0) = f_initial
         R is the radius of the circle on which we want to solve the heat equation
@@ -714,7 +714,6 @@ class PINN_heat_2d_circle_reparametrised:
         self.f_initial = f_initial
         self.alpha = alpha
 
-        self.R = R
         self.t_bounds = t_bounds
         self.tau = tau
          
@@ -748,7 +747,7 @@ class PINN_heat_2d_circle_reparametrised:
     def forward(self, points):
         x = points[:, 0:1]
         y = points[:, 1:2]
-        D = self.R**2 - x**2 - y**2  # 0 on the boudnary, as wished
+        D = 1 - x**2 - y**2  # 0 on the boudnary, as wished. keep R = 1, rescale afterwards for stability
         t = points[:, 2:3]
         A = self.compute_A(points)
         
@@ -763,7 +762,7 @@ class PINN_heat_2d_circle_reparametrised:
         standard_samples = sampler.random(n = N_collocation_points)
 
         # first: polar coordinates
-        r = self.R * np.sqrt(standard_samples[:, 0]) # take sqrt() because I want r^2 to follow a uniform distribution (area-uniform sampling)
+        r = np.sqrt(standard_samples[:, 0]) # take sqrt() because I want r^2 to follow a uniform distribution (area-uniform sampling)
         theta = 2. * np.pi * standard_samples[:, 1]
         t_min, t_max = self.t_bounds
         t = standard_samples[:, 2] * (t_max - t_min) + t_min
@@ -822,7 +821,7 @@ class PINN_heat_2d_circle_reparametrised:
         standard_samples = sampler.random(n = S0_size)
 
         # first: polar coordinates
-        r = self.R * np.sqrt(standard_samples[:, 0]) # take sqrt() because I want r^2 to follow a uniform distribution (area-uniform sampling)
+        r = np.sqrt(standard_samples[:, 0]) # take sqrt() because I want r^2 to follow a uniform distribution (area-uniform sampling)
         theta = 2. * np.pi * standard_samples[:, 1]
         t_min, t_max = self.t_bounds
         t = standard_samples[:, 2] * (t_max - t_min) + t_min
@@ -843,7 +842,7 @@ class PINN_heat_2d_circle_reparametrised:
         return sampled_points
     
 
-    def train_RAD(self, N_selected = 100, S0_size = 1000, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250):
+    def train_RAD(self, N_selected = 100, S0_size = 1000, m = 50, k = 1, c = 1, max_epochs = 30000, max_points = 20000, N_epochs_every_collocation_set = 250, N_epochs_initial_training = 5000):
         """
         Training with residual-based adaptive distribution. 
         """
@@ -852,7 +851,7 @@ class PINN_heat_2d_circle_reparametrised:
         N_epochs              = 0
 
         # first train on the LHS-sample collocation points
-        for epoch in range(N_epochs_every_collocation_set):
+        for epoch in range(N_epochs_initial_training):
             N_epochs +=1
             phys_loss = self.compute_physics_loss()
             loss      = phys_loss 
