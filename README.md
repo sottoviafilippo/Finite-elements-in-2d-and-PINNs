@@ -5,7 +5,9 @@ The Mesh class creates a 2d finite element structured mesh, with linear function
 The main limitation is that in order to generate a mesh one has to give a set of nodes in x-direction and a set of nodes in y-direction. It will not be possible, for example, to have a finer mesh in x-direction only in a given y range. This choice was taken for simplicity's sake. Future versions of this code might work with less uniform meshes.
 
 The PINNs are built with PyTorch. The file PINN-3d.py contains the definition of two PINN classes: one for solving a 2d Poisson problem (PINN_Poisson_2d) and one for a 2+1 d heat equation, called PINN_heat_2d (evolution in time of a 2d temperature field). I use these classes in order to test them in the notebook pinn_trials.ipynb, where I also compare their outputs to the results obtained with the finite element algorithm.
-I am currently testing various methods for choosing the collocation points and training the heat PINN, so far I have used LHS and RAR-G (see for instance https://arxiv.org/pdf/2207.10289). RAD is in the works. More details in the notebook.
+I am test three methods for choosing the collocation points and training the heat PINN, LHS and RAR-G and RAD (see for instance https://arxiv.org/pdf/2207.10289).  More details in the notebook.
+
+I test a PINN with reparametrisation on a system with rotational symmetry (ideally, a bottle cooling down in a fridge). I compare the results to a simple finite difference simulation, and they are ok (simulated temperatures a bit too low in the centre of the bottle, but no too far, and good rotational symmetry). This is found in the notebook bottle_in_fridge.ipynb.
 
 Sofar, I mostly wrote this code to learn PINNs for myself. Nothing really new, and the implementations can be a bit crude sometimes.
 
@@ -53,8 +55,6 @@ For the moment we can simulate the Poisson equation with Dirichlet boundary cond
 - The solution is given as a 2d array, ready for plotting (for example as a colormap).
 
 # How to use this code - Heat equation
-SECTION TO BE COMPLETED
-
 
 Note that, with explicit methods, for stability we need a high number of timesteps. The requirement seems to be well above the one posed by the CFL condition.
 
