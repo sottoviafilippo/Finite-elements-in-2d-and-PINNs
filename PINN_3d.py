@@ -861,6 +861,8 @@ class PINN_heat_2d_circle_reparametrised:
             self.optimizer.step() 
 
             self.physics_losses.append(phys_loss.item())
+            if N_epochs % 1000 == 0:
+                print(f"Epoch [{N_epochs}/{max_epochs}], N_collocation_points: {len(self.collocation_points)}, Loss: {loss.item():.4f}")
     
         while N_epochs <= max_epochs and len(self.collocation_points) <= max_points:
             
@@ -879,7 +881,6 @@ class PINN_heat_2d_circle_reparametrised:
                 loss.backward()
                 self.optimizer.step()
                 self.physics_losses.append(phys_loss.item())
-
 
                 if N_epochs % 1000 == 0:
                     print(f"Epoch [{N_epochs}/{max_epochs}], N_collocation_points: {len(self.collocation_points)}, Loss: {loss.item():.4f}")
