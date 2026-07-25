@@ -9,6 +9,7 @@ from typing import Callable
 from scipy.stats import qmc
 import random
 
+# TO DO (would be): it would be better to define the classes as nn.Module classes, especially for later optimization in training
 
 class PINN_Poisson_2d:
     """Simpler case: solve the Poisson equation in 2d with given Dirichlet boundary conditions"""
