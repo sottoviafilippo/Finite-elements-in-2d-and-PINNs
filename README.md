@@ -1,17 +1,21 @@
 # A 2d demonstration of the finite element method. And a demonstration of PINNs, applied to the heat equation
 
-The Mesh class creates a 2d finite element structured mesh, with linear functions. 
+**Finite elements**
+
+The Mesh class, defined in `FFEM_building_blocks.py`, creates a 2d finite element structured mesh, with linear functions. 
 
 The main limitation is that in order to generate a mesh one has to give a set of nodes in x-direction and a set of nodes in y-direction. It will not be possible, for example, to have a finer mesh in x-direction only in a given y range. This choice was taken for simplicity's sake. Future versions of this code might work with less uniform meshes.
 
-The PINNs are built with PyTorch. The file PINN-3d.py contains the definition of two PINN classes: one for solving a 2d Poisson problem (PINN_Poisson_2d) and one for a 2+1 d heat equation, called PINN_heat_2d (evolution in time of a 2d temperature field). I use these classes in order to test them in the notebook pinn_trials.ipynb, where I also compare their outputs to the results obtained with the finite element algorithm.
-I am test three methods for choosing the collocation points and training the heat PINN, LHS and RAR-G and RAD (see for instance https://arxiv.org/pdf/2207.10289).  More details in the notebook.
+**PINNs**
 
-I test a PINN with reparametrisation on a system with rotational symmetry (ideally, a bottle cooling down in a fridge). I compare the results to a simple finite difference simulation, and they are ok (simulated temperatures a bit too low in the centre of the bottle, but no too far, and good rotational symmetry). This is found in the notebook bottle_in_fridge.ipynb.
+The PINNs are built with PyTorch. The file `PINN-3d.py` contains the definitions of two PINN classes: one for solving a 2d Poisson problem (PINN_Poisson_2d) and one for a 2+1 d heat equation, called PINN_heat_2d (evolution in time of a 2d temperature field). I use these classes in order to test them in the notebook `pinn_trials.ipynb`, where I also compare their outputs to the results obtained with the finite element algorithm.
+I test three methods for choosing the collocation points and training the heat PINN, LHS and RAR-G and RAD (see for instance https://arxiv.org/pdf/2207.10289).  More details in the notebook.
 
-Sofar, I mostly wrote this code to learn PINNs for myself. Nothing really new, and the implementations can be a bit crude sometimes.
+I test a PINN with reparametrisation on a system with rotational symmetry (ideally, a bottle cooling down in a fridge). I compare the results to a simple finite difference simulation. The simulated temperatures are qualitatively close to the desired output, even if somewhat too low in the centre of the bottle, and show good rotational symmetry. This is found in the `notebook bottle_in_fridge.ipynb`.
 
-# A quick overview of the maths : building the mass and stiffness matrices.
+Sofar, I mostly wrote this code to learn PINNs for myself, without making use of standard libraries. Nothing really new, and the implementations can be a bit crude sometimes. 
+
+# A quick overview of the finite element maths : building the mass and stiffness matrices.
 
 We now compute the matrix elements of the mass matrix $\int \psi_i \psi_j$
 
@@ -44,8 +48,8 @@ For the stiffness matrix $\int \nabla \psi_i \nabla \psi_j$ we perform similar c
 
 We set up the matrices as sparse matrices for better efficiency.
 
-# How to use this code - Poisson equation
-An example is provided in the file trials.py.
+# How to use the finite element code - Poisson equation
+An example is provided in the file `trials.py`.
 
 For the moment we can simulate the Poisson equation with Dirichlet boundary conditions. The function "run_simulation_poisson_dirichlet" takes the source function and the function giving the boundary conditions as arguments.
 
@@ -54,7 +58,7 @@ For the moment we can simulate the Poisson equation with Dirichlet boundary cond
 - One then computes the solution with mymesh.run_simulation_poisson_dirichlet(func, diri)
 - The solution is given as a 2d array, ready for plotting (for example as a colormap).
 
-# How to use this code - Heat equation
+# How to use the finite element code - Heat equation
 
 Note that, with explicit methods, for stability we need a high number of timesteps. The requirement seems to be well above the one posed by the CFL condition.
 
