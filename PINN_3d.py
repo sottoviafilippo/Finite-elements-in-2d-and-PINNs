@@ -732,6 +732,7 @@ class PINN_heat_2d_circle_reparametrised:
         )
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=7500, gamma=0.5)
 
         pass
 
@@ -860,6 +861,7 @@ class PINN_heat_2d_circle_reparametrised:
             self.optimizer.zero_grad() 
             loss.backward() 
             self.optimizer.step() 
+            self.scheduler.step()
 
             self.physics_losses.append(phys_loss.item())
             if N_epochs % 1000 == 0:
@@ -881,6 +883,8 @@ class PINN_heat_2d_circle_reparametrised:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+                self.scheduler.step()
+
                 self.physics_losses.append(phys_loss.item())
 
                 if N_epochs % 1000 == 0:
