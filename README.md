@@ -8,12 +8,14 @@ The main limitation is that in order to generate a mesh one has to give a set of
 
 **PINNs**
 
-The PINNs are built with PyTorch. The file `PINN-3d.py` contains the definitions of two PINN classes: one for solving a 2d Poisson problem (PINN_Poisson_2d) and one for a 2+1 d heat equation, called PINN_heat_2d (evolution in time of a 2d temperature field). I use these classes in order to test them in the notebook `pinn_trials.ipynb`, where I also compare their outputs to the results obtained with the finite element algorithm.
+The PINNs are built with PyTorch. The file `PINN-3d.py` contains the definitions of two PINN classes: one for solving a 2d Poisson problem (PINN_Poisson_2d) and one for a 2+1 d heat equation, called PINN_heat_2d (evolution in time of a 2d temperature field). I use test these classes in the notebook `pinn_trials.ipynb`, where I also compare their outputs to the results obtained with the finite element algorithm.
 I test three methods for choosing the collocation points and training the heat PINN, LHS and RAR-G and RAD (see for instance https://arxiv.org/pdf/2207.10289).  More details in the notebook.
 
-I test a PINN with reparametrisation on a system with rotational symmetry (ideally, a bottle cooling down in a fridge). I compare the results to a finite difference simulation. The simulated temperatures are qualitatively close to the desired output, even if somewhat too low in the centre of the bottle, and show good rotational symmetry. This is found in the `notebook bottle_in_fridge.ipynb`. The reparametrization approach seems thus to prove effective, as expected from literature.
+I test a PINN with reparametrisation on a system with rotational symmetry (ideally, a bottle cooling down in a fridge). I compare the results to a finite difference simulation. The simulated temperatures are qualitatively close to the desired output, even if somewhat too low in the centre of the bottle, and show good rotational symmetry. This is found in the `notebook bottle_in_fridge.ipynb`. The reparametrization approach seems thus to prove effective, as expected from literature. The convergence is still quite slow; hyperparameter tuning would be useful (learning rate, scheduler parameters). The accuracy of the final model can vary. This is shown in the `notebook bottle_in_fridge.ipynb`.
 
 Sofar, I mostly wrote this code to learn PINNs for myself, without making use of standard libraries. Nothing really new, and the implementations can be a bit crude sometimes. 
+
+The next step will be comparing my results to those obtained with a well-known library such as DeepXDE.
 
 # A quick overview of the finite element maths : building the mass and stiffness matrices.
 
