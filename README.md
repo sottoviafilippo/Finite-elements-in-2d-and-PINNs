@@ -1,4 +1,4 @@
-# A 2d demonstration of the finite element method. And a demonstration of PINNs, applied to the heat equation
+# A 2d demonstration of the finite element method. And a demonstration of PINNs, applied to the 2d Poisson equation and the heat equation in 2 space dimensions.
 
 **Finite elements**
 
@@ -8,7 +8,8 @@ The main limitation is that in order to generate a mesh one has to give a set of
 
 **PINNs**
 
-The PINNs are built with PyTorch. The file `PINN-3d.py` contains the definitions of two PINN classes: one for solving a 2d Poisson problem (PINN_Poisson_2d) and one for a 2+1 d heat equation, called PINN_heat_2d (evolution in time of a 2d temperature field). I use test these classes in the notebook `pinn_trials.ipynb`, where I also compare their outputs to the results obtained with the finite element algorithm.
+The PINNs are built with PyTorch. The file `PINN-3d.py` contains the definitions of two PINN classes: one for solving a 2d Poisson problem (PINN_Poisson_2d) and one for a 2+1 d heat equation, called PINN_heat_2d (evolution in time of a 2d temperature field). 
+I test these classes in the notebook `pinn_trials.ipynb`, where I also compare their outputs to the results obtained with the finite element algorithm. The results are quite satisfying for the 2d PINNs for the Poisson equation, as one can see in the notebook.
 I test three methods for choosing the collocation points and training the heat PINN, LHS and RAR-G and RAD (see for instance https://arxiv.org/pdf/2207.10289).  More details in the notebook.
 
 I test a PINN with reparametrisation on a system with rotational symmetry (ideally, a bottle cooling down in a fridge). I compare the results to a finite difference simulation. The simulated temperatures are qualitatively close to the desired output, even if somewhat too low in the centre of the bottle, and show good rotational symmetry. This is found in the `notebook bottle_in_fridge.ipynb`. The reparametrization approach seems thus to prove effective, as expected from literature. The convergence is still quite slow; hyperparameter tuning would be useful (learning rate, scheduler parameters). The accuracy of the final model can vary. This is shown in the `notebook bottle_in_fridge.ipynb`.
@@ -53,14 +54,14 @@ We set up the matrices as sparse matrices for better efficiency.
 # How to use the finite element code - Poisson equation
 An example is provided in the file `trials.py`.
 
-For the moment we can simulate the Poisson equation with Dirichlet boundary conditions. The function "run_simulation_poisson_dirichlet" takes the source function and the function giving the boundary conditions as arguments.
+For the moment we can simulate the Poisson equation with Dirichlet boundary conditions. The function `run_simulation_poisson_dirichlet` takes the source function and the function giving the boundary conditions as arguments.
 
 - One first defines the grid in x and y directions (with two separate arrays)
-- One then initializes the mesh with the constructor Mesh(x, y), e.g. mymesh = Mesh(x, y)
-- One then computes the solution with mymesh.run_simulation_poisson_dirichlet(func, diri)
+- One then initializes the mesh with the constructor Mesh(x, y), e.g. `mymesh = Mesh(x, y)`
+- One then computes the solution with `mymesh.run_simulation_poisson_dirichlet(func, diri)`
 - The solution is given as a 2d array, ready for plotting (for example as a colormap).
 
-# How to use the finite element code - Heat equation
+# Notes on the finite element code - Heat equation
 
 Note that, with explicit methods, for stability we need a high number of timesteps. The requirement seems to be well above the one posed by the CFL condition.
 
